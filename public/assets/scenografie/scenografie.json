@@ -1,0 +1,19 @@
+{
+  "scenografie": [
+    {
+      "id": "scen-mtrbmlut",
+      "projekt": "Solita",
+      "nazwa": "studio_solita",
+      "plik": "studio_solita.glb",
+      "url": "/assets/scenografie/studio_solita.glb",
+      "bajtow": 342512,
+      "przeznaczenie": "plan",
+      "opis": "Wirtualne studio z kadru Solity — cyklorama, podloga, swiatlo trzypunktowe.",
+      "zrodlo": {
+        "blend": null,
+        "kadr": null
+      },
+      "kiedy": "2026-09-07T14:13:35.141Z"
+    }
+  ]
+}

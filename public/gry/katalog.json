@@ -1,0 +1,13 @@
+{
+  "_format": {
+    "id": "unikalny slug, np. tgs-wyspa",
+    "tytul": "nazwa wyświetlana",
+    "opis": "jedno-dwa zdania",
+    "dystrybucja": "przegladarka | pobranie | serwer",
+    "cel": "przegladarka → URL do index.html; pobranie → ścieżka/URL pliku; serwer → adres węzła",
+    "grv": "cena w GRV, 0 = darmowe (płatność NIEPODŁĄCZONA — most nie ma /api/grv/pay)",
+    "silnik": "unreal | unity | godot | custom | web (opcjonalne)",
+    "status": "wydana | w_budowie | koncept"
+  },
+  "gry": []
+}
