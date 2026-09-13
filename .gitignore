@@ -3,3 +3,8 @@ dist
 .env
 *.log
 .claude
+
+# tereny z Blendera — generowane, ciezkie; manifest zostaje
+public/assets/swiaty/*.glb
+public/assets/swiaty/*.png
+public/assets/swiaty/*.bak
