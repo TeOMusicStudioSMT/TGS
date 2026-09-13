@@ -32,6 +32,8 @@ export interface Postac {
   /** Wkładki Suwerena — wolne słowa. Wchodzą w ziarno świata. */
   wkladki: string[];
   utworzona: number;
+  /** TeOgochi ze stada, który wciela się w tę postać (id z migawki mostu). Nie wchodzi w ziarno świata. */
+  teogochi?: { id: string; imie: string; forma: string; kolor: string } | null;
 }
 
 /** Ziarno świata = wypadkowa CAŁEJ postaci. Kolejność wkładek nieistotna. */

@@ -5,7 +5,8 @@
  * świat. To nie ozdoba — to dowód, że punkt 2 („świat jest wypadkową postaci")
  * naprawdę działa, zanim gracz w ogóle wejdzie do gry.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { pobierzStado, type Teogochi } from '../../gra/npc';
 import { ZYWIOLY, DROGI, type Postac, type ZywiolId, type DrogaId } from '../../gra/postac';
 import { generujTeterhie } from '../../gra/teterhia';
 
@@ -15,6 +16,10 @@ export default function TworzeniePostaci({ naGotowe }: { naGotowe: (p: Postac) =
   const [droga, setDroga] = useState<DrogaId>('tworca');
   const [wkladka, setWkladka] = useState('');
   const [wkladki, setWkladki] = useState<string[]>([]);
+  // 🥚 Kto wciela się w postać: TeOgochi ze stada (most). Bez mostu — gracz gra sam sobą.
+  const [stado, setStado] = useState<Teogochi[]>([]);
+  const [teogochi, setTeogochi] = useState<string>('');
+  useEffect(() => { pobierzStado().then(setStado).catch(() => setStado([])); }, []);
 
   const szkic: Postac = useMemo(
     () => ({ imie: imie || 'bezimienny', zywiol, droga, wkladki, utworzona: 0 }),
@@ -119,6 +124,22 @@ export default function TworzeniePostaci({ naGotowe }: { naGotowe: (p: Postac) =
         )}
       </section>
 
+      {stado.length > 0 && (
+        <section className="space-y-2">
+          <label className="text-sm text-slate-300">Kto się wciela — TeOgochi ze stada (opcjonalnie)</label>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setTeogochi('')} className={`rounded-lg border px-3 py-1.5 text-sm ${!teogochi ? 'border-tgs-primary text-tgs-primary' : 'border-slate-700 text-slate-400'}`}>nikt — gram sobą</button>
+            {stado.map((t) => (
+              <button key={t.id} onClick={() => setTeogochi(t.id)} title={`${t.dziedzina} · ${t.etap}${t.wyklute ? '' : ' · jeszcze jajko'}`}
+                className={`rounded-lg border px-3 py-1.5 text-sm ${teogochi === t.id ? 'bg-white/10' : 'opacity-70'}`} style={{ borderColor: `${t.kolor}88`, color: t.kolor }}>
+                {t.forma} {t.imie}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">Reszta stada staje w świecie jako NPC — prawdziwe TeOgochi, z którymi się rozmawia przez most.</p>
+        </section>
+      )}
+
       <section className="rounded-xl border border-slate-800 bg-tgs-panel p-4">
         <p className="text-sm text-slate-400">
           Twój świat nazywa się <b className="text-tgs-primary">{podglad.nazwa}</b>, ziarno{' '}
@@ -131,7 +152,7 @@ export default function TworzeniePostaci({ naGotowe }: { naGotowe: (p: Postac) =
 
       <button
         disabled={!imie.trim()}
-        onClick={() => naGotowe({ ...szkic, imie: imie.trim(), utworzona: Date.now() })}
+        onClick={() => { const t = stado.find((x) => x.id === teogochi); naGotowe({ ...szkic, imie: imie.trim(), utworzona: Date.now(), teogochi: t ? { id: t.id, imie: t.imie, forma: t.forma, kolor: t.kolor } : null }); }}
         className="w-full rounded-lg bg-tgs-primary py-3 font-medium text-tgs-dark disabled:opacity-40"
       >
         {imie.trim() ? `Wejdź do ${podglad.nazwa}` : 'Wpisz imię, żeby wejść'}

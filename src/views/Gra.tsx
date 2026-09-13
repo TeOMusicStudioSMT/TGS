@@ -9,8 +9,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Sparkles, RotateCcw, Backpack } from 'lucide-react';
-import { generujTeterhie, kafelPod, PRZEJSCIE, NAZWA_BIOMU, SZEROKOSC, type Swiat } from '../gra/teterhia';
+import { Sparkles, RotateCcw, Backpack, Box, Grid3x3, Loader2 } from 'lucide-react';
+import { bridge } from '../lib/bridge';
+import { pobierzStado, rozstawNpc, rozmawiajZNpc, type Npc, type TuraNpc } from '../gra/npc';
+import Swiat3D from './gra/Swiat3D';
+import { generujTeterhie, kafelPod, PRZEJSCIE, NAZWA_BIOMU, SZEROKOSC, WYSOKOSC, type Swiat } from '../gra/teterhia';
 import { progOdkrycia, poWyborze, stanSwiata, barwa, OPIS_TONU, type Ton } from '../gra/sos';
 import { kurs, nagrodaMGRV, poziom, expDoNastepnego, mozliwaWymiana } from '../gra/ekonomia';
 import { questDlaKafla, UMIEJETNOSCI, type Quest } from '../gra/questy';
@@ -39,12 +42,65 @@ export default function Gra() {
   const [otwarty, setOtwarty] = useState<{ quest: Quest; kafel: number | null } | null>(null);
   const [plecak, setPlecak] = useState(false);
   const [kuje, setKuje] = useState(false);
+  // 🧊 3D: teren z Blendera (.glb) + NPC ze stada. Suweren: „rozwinięcie gry do 3D — robione w Blenderze".
+  const [widok3d, setWidok3d] = useState<boolean>(() => localStorage.getItem('tgs_widok') === '3d');
+  const [glb, setGlb] = useState<string | null>(null);
+  const [buduje, setBuduje] = useState(false);
+  const [npc, setNpc] = useState<Npc[]>([]);
+  const [rozmowa, setRozmowa] = useState<{ npc: Npc; historia: TuraNpc[]; tekst: string; czeka: boolean } | null>(null);
 
   const postac = stan?.postac;
   const swiat = useMemo(() => (postac ? generujTeterhie(postac) : null), [postac]);
   const wezly = useMemo(() => (swiat ? wezlySwiata(swiat) : new Map<number, Quest>()), [swiat]);
 
   const nasycenie = stan?.nasycenie ?? 0;
+
+  // Który .glb należy do tego świata — manifest z public/assets/swiaty (bez mostu).
+  useEffect(() => {
+    if (!swiat) return;
+    fetch('/assets/swiaty/swiaty.json').then((r) => (r.ok ? r.json() : { swiaty: [] })).then((d) => {
+      const s = (d.swiaty ?? []).find((x: { ziarno: number; glb: string }) => x.ziarno === swiat.ziarno);
+      setGlb(s ? `${s.glb}?v=${encodeURIComponent(String(s.kiedy ?? ''))}` : null);
+    }).catch(() => setGlb(null));
+  }, [swiat]);
+
+  // NPC = stado z mostu (bez postaci gracza), rozstawione deterministycznie ze ziarna.
+  useEffect(() => {
+    if (!swiat) return;
+    pobierzStado().then((s) => setNpc(rozstawNpc(s.filter((t) => t.id !== postac?.teogochi?.id), swiat, SZEROKOSC, WYSOKOSC))).catch(() => setNpc([]));
+  }, [swiat, postac]);
+
+  const zbudujWBlenderze = async () => {
+    if (!swiat || !postac) return;
+    setBuduje(true);
+    try {
+      const r = await bridge.post<{ glb: string; sekundy: number; blender: string; kiedy: string }>('/api/tgs/3d/swiat', {
+        nazwa: swiat.nazwa, ziarno: swiat.ziarno, szerokosc: SZEROKOSC, wysokosc: WYSOKOSC, kafle: swiat.kafle, postac,
+      });
+      setGlb(`${r.glb}?v=${encodeURIComponent(r.kiedy)}`);
+      setWidok3d(true); localStorage.setItem('tgs_widok', '3d');
+      toast.success(`${r.blender} zbudował teren w ${r.sekundy} s.`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e), { duration: 9000 }); }
+    finally { setBuduje(false); }
+  };
+
+  const otworzRozmowe = (n: Npc) => {
+    if (!n.wyklute) { toast(`${n.forma} ${n.imie} to jeszcze jajko — wykluje się w Katedrze, wtedy przemówi.`, { icon: '🥚' }); return; }
+    setRozmowa({ npc: n, historia: [], tekst: '', czeka: false });
+  };
+  const powiedzNpc = async () => {
+    if (!rozmowa || !swiat || !stan || rozmowa.czeka) return;
+    const t = rozmowa.tekst.trim(); if (!t) return;
+    const hist: TuraNpc[] = [...rozmowa.historia, { kto: 'gracz', tresc: t }];
+    setRozmowa({ ...rozmowa, historia: hist, tekst: '', czeka: true });
+    try {
+      const k = kafelPod(swiat, rozmowa.npc.x, rozmowa.npc.y);
+      const r = await rozmawiajZNpc({ teogochiId: rozmowa.npc.id, wypowiedz: t, historia: rozmowa.historia, swiat: `${swiat.nazwa} (ziarno ${swiat.ziarno})`, kafel: k ? `${NAZWA_BIOMU[k.biom]}, rola NPC: ${rozmowa.npc.rola}` : rozmowa.npc.rola, gracz: `${stan.postac.imie}, poziom ${poziom(stan.exp)}, nasycenie ${stan.nasycenie}` });
+      setRozmowa((s) => (s ? { ...s, historia: [...hist, { kto: 'npc', tresc: r.mowa }], czeka: false } : s));
+    } catch (e) {
+      setRozmowa((s) => (s ? { ...s, historia: [...hist, { kto: 'npc', tresc: `(${rozmowa.npc.imie} milczy: ${e instanceof Error ? e.message : String(e)})` }], czeka: false } : s));
+    }
+  };
 
   /** Węzły widoczne TERAZ — sekrety odsłania dopiero nasycenie. Punkt 8. */
   const widoczne = useMemo(() => {
@@ -89,6 +145,9 @@ export default function Gra() {
         a: [-1, 0],
         d: [1, 0],
       };
+      // Pisząc do NPC (w, s, a, d w zdaniu) nie chcemy biegać po mapie.
+      const cel = e.target as HTMLElement | null;
+      if (cel && (cel.tagName === 'INPUT' || cel.tagName === 'TEXTAREA')) return;
       const v = mapa[e.key];
       if (v) {
         e.preventDefault();
@@ -189,14 +248,43 @@ export default function Gra() {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-3">
-        <Plansza
-          swiat={swiat}
-          postac={stan.postac}
-          pozycja={stan.pozycja}
-          nasycenie={stan.nasycenie}
-          wezly={widoczne}
-          ukonczone={new Set(stan.ukonczone)}
-        />
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <button onClick={() => { setWidok3d(false); localStorage.setItem('tgs_widok', '2d'); }} className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 ${!widok3d ? 'border-tgs-primary text-tgs-primary' : 'border-slate-700 text-slate-400'}`}><Grid3x3 size={13} /> plansza 2D</button>
+          <button onClick={() => { setWidok3d(true); localStorage.setItem('tgs_widok', '3d'); }} className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 ${widok3d ? 'border-tgs-primary text-tgs-primary' : 'border-slate-700 text-slate-400'}`}><Box size={13} /> świat 3D</button>
+          <button onClick={() => void zbudujWBlenderze()} disabled={buduje} className="ml-auto flex items-center gap-1 rounded-lg border border-amber-500/50 px-3 py-1.5 text-amber-200 disabled:opacity-50" title="Ten sam teren, który widzisz na planszy, zbudowany w Blenderze i wyeksportowany do .glb (ok. 30 s)">
+            {buduje ? <Loader2 size={13} className="animate-spin" /> : '🧊'} {glb ? 'Przebuduj w Blenderze' : 'Zbuduj w Blenderze'}
+          </button>
+          <span className="text-slate-600">{npc.length} NPC ze stada{stan.postac.teogochi ? ` · grasz jako ${stan.postac.teogochi.forma} ${stan.postac.teogochi.imie}` : ''}</span>
+        </div>
+        {widok3d ? (
+          <Swiat3D swiat={swiat} postac={stan.postac} pozycja={stan.pozycja} npc={npc} wezly={widoczne} ukonczone={new Set(stan.ukonczone)} glb={glb} onNpc={otworzRozmowe} />
+        ) : (
+          <Plansza
+            swiat={swiat}
+            postac={stan.postac}
+            pozycja={stan.pozycja}
+            nasycenie={stan.nasycenie}
+            wezly={widoczne}
+            ukonczone={new Set(stan.ukonczone)}
+          />
+        )}
+        {rozmowa && (
+          <div className="rounded-xl border p-3 text-sm" style={{ borderColor: `${rozmowa.npc.kolor}77` }}>
+            <div className="mb-2 flex items-center justify-between">
+              <span style={{ color: rozmowa.npc.kolor }}>{rozmowa.npc.forma} <b>{rozmowa.npc.imie}</b> <span className="text-xs text-slate-500">· {rozmowa.npc.rola} · {rozmowa.npc.dziedzina}</span></span>
+              <button onClick={() => setRozmowa(null)} className="text-xs text-slate-500 hover:text-white">zamknij</button>
+            </div>
+            <div className="max-h-40 space-y-1 overflow-y-auto text-xs">
+              {!rozmowa.historia.length && <div className="text-slate-500">Powiedz coś — odpowie prawdziwy TeOgochi przez most (Ollama, lokalnie).</div>}
+              {rozmowa.historia.map((h, i) => <div key={i} className={h.kto === 'gracz' ? 'text-right text-slate-300' : ''} style={h.kto === 'npc' ? { color: rozmowa.npc.kolor } : {}}>{h.tresc}</div>)}
+              {rozmowa.czeka && <div className="text-slate-500"><Loader2 size={11} className="inline animate-spin" /> myśli…</div>}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <input value={rozmowa.tekst} onChange={(e) => setRozmowa({ ...rozmowa, tekst: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') void powiedzNpc(); e.stopPropagation(); }} placeholder="np. gdzie tu szukać Sosu?" className="flex-1 rounded-lg border border-slate-700 bg-black/40 px-2 py-1.5 text-xs outline-none" />
+              <button onClick={() => void powiedzNpc()} disabled={rozmowa.czeka} className="rounded-lg px-3 text-xs font-bold text-black disabled:opacity-40" style={{ backgroundColor: rozmowa.npc.kolor }}>mów</button>
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
           <span>WSAD / strzałki — ruch</span>
           <span>·</span>
