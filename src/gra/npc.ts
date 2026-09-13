@@ -76,6 +76,36 @@ export async function pobierzStado(): Promise<Teogochi[]> {
 
 export interface TuraNpc { kto: 'gracz' | 'npc'; tresc: string }
 
+/** 🎬 Scenografie z kadrów Story — .glb w public/assets/scenografie (manifest bez mostu). */
+export interface Scenografia { id: string; projekt: string; nazwa: string; url: string; bajtow: number; opis: string; kiedy: string; zrodlo?: { kadr: string | null } }
+/** Scenografia POSTAWIONA w konkretnym świecie: gdzie i w jakiej skali (1 kafel = 1 jednostka; studio ma 16 m). */
+export interface Postawiona { id: string; url: string; nazwa: string; x: number; y: number; skala: number; obrot: number }
+
+export async function listaScenografii(): Promise<Scenografia[]> {
+  const r = await fetch('/assets/scenografie/scenografie.json');
+  if (!r.ok) return [];
+  return ((await r.json()).scenografie ?? []) as Scenografia[];
+}
+export interface KadrZObrazem { id: string; tytul: string; opis: string; etap: string; obraz: boolean; plik: string }
+export async function kadryZObrazem(projekt: string): Promise<KadrZObrazem[]> {
+  const d = await bridge.get<{ kadry: KadrZObrazem[] }>(`/api/produkcja/kadry-z-obrazem?projekt=${encodeURIComponent(projekt)}`);
+  return (d.kadry ?? []).filter((k) => k.obraz);
+}
+export async function projektyStory(): Promise<string[]> {
+  const d = await bridge.get<{ projekty: { nazwa: string }[] }>('/api/rezyser/projekty');
+  return (d.projekty ?? []).map((p) => p.nazwa);
+}
+export const zbudujScenografie = (b: { projekt: string; kadrId: string; nazwa?: string }) =>
+  bridge.post<{ wpis: Scenografia; sekundy: number; blender: string }>('/api/tgs/3d/scenografia', b);
+
+const KLUCZ = (ziarno: number) => `tgs_scenografie_${ziarno}`;
+export function wczytajPostawione(ziarno: number): Postawiona[] {
+  try { return JSON.parse(localStorage.getItem(KLUCZ(ziarno)) || '[]'); } catch { return []; }
+}
+export function zapiszPostawione(ziarno: number, lista: Postawiona[]): void {
+  try { localStorage.setItem(KLUCZ(ziarno), JSON.stringify(lista)); } catch { /* brak miejsca — scena żyje w oknie */ }
+}
+
 export async function rozmawiajZNpc(dane: { teogochiId: string; wypowiedz: string; historia: TuraNpc[]; swiat: string; kafel: string; gracz: string }) {
   const r = await fetch(`${BRIDGE}/api/tgs/npc/rozmowa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dane) });
   const d = await r.json();

@@ -18,7 +18,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { SZEROKOSC, WYSOKOSC, type Swiat } from '../../gra/teterhia';
 import { zywiolPostaci, type Postac } from '../../gra/postac';
-import type { Npc } from '../../gra/npc';
+import type { Npc, Postawiona } from '../../gra/npc';
 
 interface Props {
   swiat: Swiat;
@@ -28,6 +28,7 @@ interface Props {
   wezly: Set<number>;
   ukonczone: Set<number>;
   glb: string | null;
+  scenografie?: Postawiona[];
   onNpc?: (n: Npc) => void;
 }
 
@@ -45,9 +46,9 @@ function etykieta(tekst: string, kolor: string): THREE.Sprite {
   return s;
 }
 
-export default function Swiat3D({ swiat, postac, pozycja, npc, wezly, ukonczone, glb, onNpc }: Props) {
+export default function Swiat3D({ swiat, postac, pozycja, npc, wezly, ukonczone, glb, scenografie = [], onNpc }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const scenaRef = useRef<{ scena: THREE.Scene; teren: THREE.Object3D | null; gracz: THREE.Group; npcGrupa: THREE.Group; znaczniki: THREE.Group; wysokosc: (x: number, y: number) => number } | null>(null);
+  const scenaRef = useRef<{ scena: THREE.Scene; teren: THREE.Object3D | null; gracz: THREE.Group; npcGrupa: THREE.Group; znaczniki: THREE.Group; scenGrupa: THREE.Group; wysokosc: (x: number, y: number) => number } | null>(null);
   const [stanGlb, setStanGlb] = useState<'laduje' | 'ok' | 'brak' | 'blad'>('laduje');
   const [blad, setBlad] = useState('');
   const hue = useMemo(() => zywiolPostaci(postac).hue, [postac]);
@@ -80,8 +81,9 @@ export default function Swiat3D({ swiat, postac, pozycja, npc, wezly, ukonczone,
     scena.add(gracz);
     const npcGrupa = new THREE.Group(); scena.add(npcGrupa);
     const znaczniki = new THREE.Group(); scena.add(znaczniki);
+    const scenGrupa = new THREE.Group(); scena.add(scenGrupa);
 
-    const stan = { scena, teren: null as THREE.Object3D | null, gracz, npcGrupa, znaczniki, wysokosc: (_x: number, _y: number) => 0 };
+    const stan = { scena, teren: null as THREE.Object3D | null, gracz, npcGrupa, znaczniki, scenGrupa, wysokosc: (_x: number, _y: number) => 0 };
     scenaRef.current = stan;
 
     // Wysokość terenu pod kaflem — z raycastu w dół (teren ma prawdziwe zbocza z Blendera).
@@ -152,6 +154,27 @@ export default function Swiat3D({ swiat, postac, pozycja, npc, wezly, ukonczone,
       s.znaczniki.add(m);
     });
   }, [npc, wezly, ukonczone, stanGlb]);
+
+  // 🎬 Scenografie z kadrów Story — .glb studia (cyklorama z kadru) postawione na kaflach.
+  // Ładowane po URL; ta sama lista = te same obiekty (klucz url+x+y+skala).
+  useEffect(() => {
+    const s = scenaRef.current; if (!s) return;
+    const klucze = new Set(scenografie.map((p) => `${p.url}|${p.x}|${p.y}|${p.skala}|${p.obrot}`));
+    for (const o of [...s.scenGrupa.children]) if (!klucze.has(o.userData.klucz)) s.scenGrupa.remove(o);
+    const juz = new Set(s.scenGrupa.children.map((o) => o.userData.klucz as string));
+    const loader = new GLTFLoader();
+    for (const p of scenografie) {
+      const klucz = `${p.url}|${p.x}|${p.y}|${p.skala}|${p.obrot}`;
+      if (juz.has(klucz)) continue;
+      loader.load(p.url, (g) => {
+        const ob = g.scene; ob.userData.klucz = klucz;
+        ob.scale.setScalar(p.skala);
+        ob.rotation.y = (p.obrot * Math.PI) / 180;
+        const poz = doSceny(p.x, p.y); poz.y = s.wysokosc(p.x, p.y); ob.position.copy(poz);
+        s.scenGrupa.add(ob);
+      }, undefined, () => { /* brak pliku — lista w Gra.tsx pokaże, że .glb nie ma */ });
+    }
+  }, [scenografie, stanGlb]);
 
   return (
     <div className="relative">
