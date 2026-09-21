@@ -6,7 +6,9 @@
  * Żadnych `catch { return fakeSuccess }`.
  */
 
-export const BRIDGE = 'http://127.0.0.1:3001';
+// `?most=3009` w adresie = most testowy (Klaudiusz sprawdza nowy kod bez restartu żywego :3001).
+const mostZAdresu = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('most') : null;
+export const BRIDGE = /^\d{2,5}$/.test(mostZAdresu ?? '') ? `http://127.0.0.1:${mostZAdresu}` : 'http://127.0.0.1:3001';
 
 export class BridgeOffline extends Error {
   constructor() {

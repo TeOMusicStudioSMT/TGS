@@ -10,16 +10,17 @@
  * Bez mostu Forge i Agenci nic nie zrobią i mówią to wprost.
  */
 import { useEffect, useState } from 'react';
-import { Gamepad2, Hammer, Bot, Sparkles, Wrench } from 'lucide-react';
+import { Gamepad2, Hammer, Bot, Sparkles, Wrench, Clapperboard } from 'lucide-react';
 import HubGier from './views/HubGier';
 import Forge from './views/Forge';
 import Agenci from './views/Agenci';
 import Gra from './views/Gra';
 import KodeksGra from './views/KodeksGra';
+import RezyserGry from './views/RezyserGry';
 import { mostZyje } from './lib/bridge';
 import { misjaZAdresu, nasluchujMisji, type MisjaTGS } from './lib/teleport';
 
-type Widok = 'hub' | 'gra' | 'forge' | 'agenci' | 'kodeks';
+type Widok = 'hub' | 'gra' | 'forge' | 'agenci' | 'kodeks' | 'gdd';
 
 const MENU: { id: Widok; nazwa: string; Ikona: typeof Gamepad2 }[] = [
   { id: 'hub', nazwa: 'Galeria Gier', Ikona: Gamepad2 },
@@ -28,6 +29,8 @@ const MENU: { id: Widok; nazwa: string; Ikona: typeof Gamepad2 }[] = [
   { id: 'agenci', nazwa: 'Agenci', Ikona: Bot },
   // 🎮 Kodeks buduje grę — three.js na moście, z panelem produkcyjnym Nocnej Zmiany (2026-09-21)
   { id: 'kodeks', nazwa: 'Kodeks buduje', Ikona: Wrench },
+  // 📜 GDD + Reżyser Gry + silnik (2026-09-21): plan z dokumentu → zadania dla Kodeksa
+  { id: 'gdd', nazwa: 'GDD i Reżyser', Ikona: Clapperboard },
 ];
 
 export default function App() {
@@ -103,6 +106,7 @@ export default function App() {
         {widok === 'forge' && <Forge />}
         {widok === 'agenci' && <Agenci />}
         {widok === 'kodeks' && <KodeksGra />}
+        {widok === 'gdd' && <RezyserGry />}
       </main>
     </div>
   );
