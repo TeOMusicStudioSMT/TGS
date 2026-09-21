@@ -10,21 +10,24 @@
  * Bez mostu Forge i Agenci nic nie zrobią i mówią to wprost.
  */
 import { useEffect, useState } from 'react';
-import { Gamepad2, Hammer, Bot, Sparkles } from 'lucide-react';
+import { Gamepad2, Hammer, Bot, Sparkles, Wrench } from 'lucide-react';
 import HubGier from './views/HubGier';
 import Forge from './views/Forge';
 import Agenci from './views/Agenci';
 import Gra from './views/Gra';
+import KodeksGra from './views/KodeksGra';
 import { mostZyje } from './lib/bridge';
 import { misjaZAdresu, nasluchujMisji, type MisjaTGS } from './lib/teleport';
 
-type Widok = 'hub' | 'gra' | 'forge' | 'agenci';
+type Widok = 'hub' | 'gra' | 'forge' | 'agenci' | 'kodeks';
 
 const MENU: { id: Widok; nazwa: string; Ikona: typeof Gamepad2 }[] = [
   { id: 'hub', nazwa: 'Galeria Gier', Ikona: Gamepad2 },
   { id: 'gra', nazwa: 'To Get Sauce', Ikona: Sparkles },
   { id: 'forge', nazwa: 'TeO Forge', Ikona: Hammer },
   { id: 'agenci', nazwa: 'Agenci', Ikona: Bot },
+  // 🎮 Kodeks buduje grę — three.js na moście, z panelem produkcyjnym Nocnej Zmiany (2026-09-21)
+  { id: 'kodeks', nazwa: 'Kodeks buduje', Ikona: Wrench },
 ];
 
 export default function App() {
@@ -99,6 +102,7 @@ export default function App() {
         {widok === 'gra' && <Gra />}
         {widok === 'forge' && <Forge />}
         {widok === 'agenci' && <Agenci />}
+        {widok === 'kodeks' && <KodeksGra />}
       </main>
     </div>
   );
