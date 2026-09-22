@@ -54,8 +54,8 @@ export default function Assety3D() {
     const [tekst, setTekst] = useState('');
     const [nazwa, setNazwa] = useState('');
     const [projekt, setProjekt] = useState('');
-    const [sciany, setSciany] = useState(20000);
-    const [rozdz, setRozdz] = useState(1024);
+    const [sciany, setSciany] = useState(8000);
+    const [rozdz, setRozdz] = useState(512);
     const [blad, setBlad] = useState<string | null>(null);
     const [wysylam, setWysylam] = useState(false);
     const plikRef = useRef<HTMLInputElement>(null);
@@ -98,8 +98,8 @@ export default function Assety3D() {
                         <textarea value={tekst} onChange={(e) => setTekst(e.target.value)} rows={3} placeholder={'Opis po polsku, np. „kamienny golem porośnięty mchem, zielone oczy" (przy zdjęciu: opcjonalny opis)'} className="w-full resize-none rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-xs outline-none focus:border-tgs-primary/60" />
                         <input value={nazwa} onChange={(e) => setNazwa(e.target.value)} placeholder="Nazwa pliku (np. golem)" className="w-full rounded-lg border border-slate-700 bg-black/40 px-3 py-1.5 text-xs outline-none focus:border-tgs-primary/60" />
                         <div className="grid grid-cols-2 gap-2">
-                            <label className="text-[10px] text-slate-500">Ścian<select value={sciany} onChange={(e) => setSciany(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs">{[3000, 8000, 20000, 50000].map((n) => <option key={n} value={n}>{n.toLocaleString('pl-PL')}</option>)}</select></label>
-                            <label className="text-[10px] text-slate-500">Rozdzielczość<select value={rozdz} onChange={(e) => setRozdz(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs">{[1024, 1280, 1536].map((n) => <option key={n} value={n}>{n}{n === 1024 ? ' (szybko)' : ''}</option>)}</select></label>
+                            <label className="text-[10px] text-slate-500">Ścian<select value={sciany} onChange={(e) => setSciany(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs">{[2000, 4000, 8000, 15000, 30000].map((n) => <option key={n} value={n}>{n.toLocaleString('pl-PL')}</option>)}</select></label>
+                            <label className="text-[10px] text-slate-500">Rozdzielczość<select value={rozdz} onChange={(e) => setRozdz(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs">{[512, 1024, 1536].map((n) => <option key={n} value={n}>{n}{n === 512 ? ' (szybko, ~7 min)' : n === 1024 ? ' (dokładniej, ~13 min, VRAM na styk)' : ' (ryzyko VRAM)'}</option>)}</select></label>
                         </div>
                         <label className="text-[10px] text-slate-500">Od razu do gry<select value={projekt} onChange={(e) => setProjekt(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs"><option value="">— tylko biblioteka —</option>{gry.map((g) => <option key={g.id} value={g.id}>{g.nazwa}</option>)}</select></label>
                         <button onClick={() => void zlec()} disabled={wysylam || trwa || tekst.trim().length < 3 || !stan?.gotowe} className="flex w-full items-center justify-center gap-1 rounded-lg bg-tgs-primary/80 py-2 text-sm font-semibold text-black hover:bg-tgs-primary disabled:opacity-40">{wysylam ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Z tekstu</button>
