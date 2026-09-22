@@ -10,17 +10,18 @@
  * Bez mostu Forge i Agenci nic nie zrobią i mówią to wprost.
  */
 import { useEffect, useState } from 'react';
-import { Gamepad2, Hammer, Bot, Sparkles, Wrench, Clapperboard } from 'lucide-react';
+import { Gamepad2, Hammer, Bot, Sparkles, Wrench, Clapperboard, Box } from 'lucide-react';
 import HubGier from './views/HubGier';
 import Forge from './views/Forge';
 import Agenci from './views/Agenci';
 import Gra from './views/Gra';
 import KodeksGra from './views/KodeksGra';
 import RezyserGry from './views/RezyserGry';
+import Assety3D from './views/Assety3D';
 import { mostZyje } from './lib/bridge';
 import { misjaZAdresu, nasluchujMisji, type MisjaTGS } from './lib/teleport';
 
-type Widok = 'hub' | 'gra' | 'forge' | 'agenci' | 'kodeks' | 'gdd';
+type Widok = 'hub' | 'gra' | 'forge' | 'agenci' | 'kodeks' | 'gdd' | 'assety';
 
 const MENU: { id: Widok; nazwa: string; Ikona: typeof Gamepad2 }[] = [
   { id: 'hub', nazwa: 'Galeria Gier', Ikona: Gamepad2 },
@@ -31,6 +32,8 @@ const MENU: { id: Widok; nazwa: string; Ikona: typeof Gamepad2 }[] = [
   { id: 'kodeks', nazwa: 'Kodeks buduje', Ikona: Wrench },
   // 📜 GDD + Reżyser Gry + silnik (2026-09-21): plan z dokumentu → zadania dla Kodeksa
   { id: 'gdd', nazwa: 'GDD i Reżyser', Ikona: Clapperboard },
+  // 🗿 Assety 3D z tekstu i zdjęć (2026-09-22): FLUX.2 klein → TRELLIS.2 na moście
+  { id: 'assety', nazwa: 'Assety 3D', Ikona: Box },
 ];
 
 export default function App() {
@@ -107,6 +110,7 @@ export default function App() {
         {widok === 'agenci' && <Agenci />}
         {widok === 'kodeks' && <KodeksGra />}
         {widok === 'gdd' && <RezyserGry />}
+        {widok === 'assety' && <Assety3D />}
       </main>
     </div>
   );
