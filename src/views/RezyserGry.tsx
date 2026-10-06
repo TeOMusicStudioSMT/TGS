@@ -11,12 +11,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clapperboard, FileUp, Loader2, ListChecks, Play, RefreshCw, Save, Send, Square, Cpu, Check } from 'lucide-react';
 import { gry as pobierzGry, silniki as pobierzModele, type ProjektGry, type Silnik } from '../lib/kodeks';
+import { szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
 import { SEKCJE, importujPlik, importujTekst, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type WpisRozmowy } from '../lib/gdd';
 
 const STAN_ZADANIA: Record<string, string> = { czeka: 'text-slate-500', trwa: 'text-cyan-300', gotowe: 'text-emerald-300', blad: 'text-rose-300', pominiete: 'text-slate-600 line-through' };
 const ZNAK: Record<string, string> = { czeka: '○', trwa: '◐', gotowe: '●', blad: '✗', pominiete: '–' };
 
-export default function RezyserGry() {
+export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: string; onGra?: (id: string) => void } = {}) {
     const [lista, setLista] = useState<ProjektGry[] | null>(null);
     const [mostOffline, setMostOffline] = useState(false);
     const [wybrany, setWybrany] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export default function RezyserGry() {
     const [propozycja, setPropozycja] = useState<Propozycja | null>(null);
     const plikRef = useRef<HTMLInputElement>(null);
     const rozmowaRef = useRef<HTMLDivElement>(null);
+    const [szablony, setSzablony] = useState<Szablon[]>([]);
 
     const odswiezListe = useCallback(async () => {
         try { setLista(await pobierzGry()); setMostOffline(false); } catch { setLista([]); setMostOffline(true); }
@@ -45,10 +47,19 @@ export default function RezyserGry() {
             const d = await wczytajGdd(id);
             setWybrany(id); setGdd(d.gdd ?? pusteGdd()); setProdukcja(d.produkcja); setBrudne(false);
             setRozmowa(d.gdd?.historia ?? []); setPropozycja(null);
+            onGra?.(id);
         } catch (e) { setBlad((e as Error).message); }
-    }, []);
+    }, [onGra]);
+    // 📜 Scenariusz Suwerena jako projekt (most: services/SzablonyGier.js) — drugi raz otwiera istniejący, GDD nie jest nadpisywane.
+    const zasiej = async (s: Szablon) => {
+        setBlad(null); setPraca('zapis');
+        try { const w = await zasiejSzablon(s.id); await odswiezListe(); await wczytaj(w.projekt); }
+        catch (e) { setBlad((e as Error).message); } finally { setPraca(null); }
+    };
 
-    useEffect(() => { void odswiezListe(); }, [odswiezListe]);
+    useEffect(() => { void odswiezListe(); pobierzSzablony().then(setSzablony).catch(() => setSzablony([])); }, [odswiezListe]);
+    // Gra wybrana w innym kroku (Obrazy, Dyrygent…) otwiera się tu sama.
+    useEffect(() => { if (wybranaGra && wybranaGra !== wybrany) void wczytaj(wybranaGra); }, [wybranaGra]); // eslint-disable-line react-hooks/exhaustive-deps
     useEffect(() => { silnikiGdd().then(setSilniki).catch(() => setSilniki({})); pobierzModele().then((s) => { setModele(s); setModel((s.find((x) => x.domyslny) ?? s[0])?.model ?? ''); }).catch(() => setModele([])); }, []);
     useEffect(() => { rozmowaRef.current?.scrollTo({ top: rozmowaRef.current.scrollHeight }); }, [rozmowa, praca]);
     // Produkcja w tle: dopóki trwa, pytamy most co 10 s (zadania Kodeksa trwają minuty).
@@ -145,6 +156,22 @@ export default function RezyserGry() {
                                     </button>
                                 ))}
                     </div>
+                    {szablony.length > 0 && (
+                        <div className="space-y-2 rounded-xl border border-tgs-accent/30 bg-tgs-accent/5 p-3">
+                            <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">📜 Scenariusze Suwerena</p>
+                            {szablony.map((sz) => {
+                                const jest = lista?.find((g) => g.nazwa === sz.nazwa);
+                                return (
+                                    <div key={sz.id} className="space-y-1">
+                                        <p className="text-sm font-semibold">{sz.nazwa}</p>
+                                        <p className="text-[10px] leading-snug text-slate-400">{sz.opis}</p>
+                                        <p className="font-mono text-[10px] text-slate-500">{sz.kamienie} kamieni milowych · {sz.galezie} gałęzi świata</p>
+                                        <button onClick={() => void zasiej(sz)} disabled={!!praca} className="w-full rounded-lg border border-tgs-accent/50 py-1.5 text-xs text-tgs-accent hover:bg-tgs-accent/10 disabled:opacity-40">{jest ? 'Otwórz projekt' : 'Załóż projekt z tego scenariusza'}</button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                     <div className="space-y-2 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
                         <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Cpu size={12} /> Silnik gry</p>
                         <select value={gdd?.silnik ?? 'three'} disabled={!gdd} onChange={(e) => zmien({ silnik: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1.5 text-xs outline-none focus:border-tgs-primary/60 disabled:opacity-50">
