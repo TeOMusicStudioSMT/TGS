@@ -30,3 +30,7 @@ export const generujZeZdjecia = (plik: File, p: { nazwa?: string; opis?: string;
 export const doGry = (id: string, projekt: string) => api<{ plik: string }>(`/api/assety3d/${encodeURIComponent(id)}/do-gry`, { method: 'POST', body: JSON.stringify({ projekt }) });
 export const usunAsset = (id: string) => api<{ usunieto: boolean }>(`/api/assety3d/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const adresPliku = (id: string, plik: 'model.glb' | 'obraz.png', t = 0) => `${BRIDGE}/api/assety3d/${encodeURIComponent(id)}/plik/${plik}${t ? `?t=${t}` : ''}`;
+/** 🏛️ Bryła na Stół — stado ulepsza opis, po ratyfikacji Zlecenia Stada liczą NOWĄ wersję (linia OBIEKT:). */
+export const naStol = (id: string, uwagi: string) => api<{ karta: { id: string; tytul: string } }>(`/api/assety3d/${encodeURIComponent(id)}/na-stol`, { method: 'POST', body: JSON.stringify({ uwagi }) });
+/** 📦 Bryła do Składnicy Katedry (_OtakOs_Assety/bryly) — wspólna dla Story, gier i innych modułów; bez dubli. */
+export const doSkladnicy = (id: string) => api<{ nowy: boolean; asset: { id: string } }>(`/api/assety3d/${encodeURIComponent(id)}/do-skladnicy`, { method: 'POST', body: '{}' });
