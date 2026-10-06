@@ -7,12 +7,12 @@
  * naprawdę wyszło z TRELLIS.2, nie obrazek. Logika w moście (services/Assety3D.js).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon } from 'lucide-react';
+import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 
 function PodgladGlb({ url }: { url: string | null }) {
     const ref = useRef<HTMLDivElement>(null);
@@ -57,6 +57,7 @@ export default function Assety3D() {
     const [sciany, setSciany] = useState(8000);
     const [rozdz, setRozdz] = useState(512);
     const [blad, setBlad] = useState<string | null>(null);
+    const [info, setInfo] = useState<string | null>(null);
     const [wysylam, setWysylam] = useState(false);
     const plikRef = useRef<HTMLInputElement>(null);
 
@@ -75,6 +76,19 @@ export default function Assety3D() {
         } catch (e) { setBlad((e as Error).message); } finally { setWysylam(false); if (plikRef.current) plikRef.current.value = ''; }
     };
     const dodajDoGry = async (a: Asset3D, gra: string) => { try { await doGry(a.id, gra); await odswiez(); } catch (e) { setBlad((e as Error).message); } };
+    // 🏛️ Na Stół: stado (Pionek, Paleta, Kodeks) ocenia bryłę i pisze lepszy opis; po ratyfikacji powstaje nowa wersja.
+    const doStolu = async (a: Asset3D) => {
+        const uwagi = window.prompt(`Co poprawić w „${a.nazwa}”? (puste = niech stado oceni samo)`, '');
+        if (uwagi === null) return;
+        setBlad(null);
+        try { const d = await naStol(a.id, uwagi); setInfo(`🏛️ „${d.karta.tytul}” leży na Stole — przyjmij ją w Katedrze (Stół / StoL), a po ratyfikacji Zlecenia Stada policzą nową wersję.`); }
+        catch (e) { setBlad((e as Error).message); }
+    };
+    const wSkladnicy = async (a: Asset3D) => {
+        setBlad(null);
+        try { const d = await doSkladnicy(a.id); setInfo(d.nowy ? `📦 „${a.nazwa}” w Składnicy Katedry (bryły) — Story i inne moduły ją widzą.` : `📦 „${a.nazwa}” już była w Składnicy — dołożone brakujące pliki.`); }
+        catch (e) { setBlad((e as Error).message); }
+    };
     const usun = async (a: Asset3D) => { if (!window.confirm(`Usunąć asset „${a.nazwa}" z biblioteki? (kopie w grach zostają)`)) return; try { await usunAsset(a.id); if (wybrany?.id === a.id) setWybrany(null); await odswiez(); } catch (e) { setBlad((e as Error).message); } };
 
     const trwa = biezace?.stan === 'trwa';
@@ -90,6 +104,7 @@ export default function Assety3D() {
             </header>
             {stan && !stan.gotowe && <p className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2 text-sm text-amber-200">Silnik niegotowy: {stan.braki.join(' · ')}</p>}
             {blad && <p className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-4 py-2 text-sm text-rose-200">{blad}</p>}
+            {info && <p className="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2 text-sm text-emerald-200">{info} <button onClick={() => setInfo(null)} className="ml-2 text-emerald-400/70 hover:text-emerald-200">✕</button></p>}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr_380px]">
                 <aside className="space-y-3">
@@ -105,6 +120,7 @@ export default function Assety3D() {
                         <button onClick={() => void zlec()} disabled={wysylam || trwa || tekst.trim().length < 3 || !stan?.gotowe} className="flex w-full items-center justify-center gap-1 rounded-lg bg-tgs-primary/80 py-2 text-sm font-semibold text-black hover:bg-tgs-primary disabled:opacity-40">{wysylam ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Z tekstu</button>
                         <label className={`flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-sm hover:border-tgs-primary/40 ${wysylam || trwa || !stan?.gotowe ? 'pointer-events-none opacity-40' : ''}`}><Upload size={14} /> Ze zdjęcia<input ref={plikRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void zlec(f); }} /></label>
                         <p className="text-[10px] leading-snug text-slate-500">Jeden asset naraz (6 GB VRAM). Nie odpalaj w tym czasie renderów w Story.</p>
+                        <p className="text-[10px] leading-snug text-amber-300/80">Zdjęcie: JEDEN obiekt albo jedna postać na spokojnym tle. Cała scena (koncert, tłum, kilka osób, plakat z napisami) daje bryłę-kolaż — TRELLIS.2 nie wie, co jest „tym” obiektem.</p>
                     </div>
                     {biezace && (
                         <div className={`space-y-1 rounded-xl border p-3 text-xs ${biezace.stan === 'trwa' ? 'border-cyan-500/40 bg-cyan-950/20' : biezace.stan === 'gotowe' ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-rose-500/40 bg-rose-950/20'}`}>
@@ -129,6 +145,8 @@ export default function Assety3D() {
                                 {a.blad && <p className="text-[10px] text-rose-300">{a.blad}</p>}
                                 <div className="flex items-center gap-1">
                                     {a.stan === 'gotowe' && <select defaultValue="" onClick={(e) => e.stopPropagation()} onChange={(e) => { if (e.target.value) { void dodajDoGry(a, e.target.value); e.target.value = ''; } }} className="min-w-0 flex-1 rounded-md border border-slate-700 bg-black/40 px-1 py-1 text-[11px]"><option value="">→ do gry…</option>{gry.map((g) => <option key={g.id} value={g.id}>{g.nazwa}</option>)}</select>}
+                                    {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void doStolu(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-amber-300" title="Na Stół — stado ulepszy bryłę (nowa wersja po ratyfikacji)"><Landmark size={14} /></button>}
+                                    {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void wSkladnicy(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-sky-300" title="Do Składnicy Katedry (wspólne bryły)"><Package size={14} /></button>}
                                     <button onClick={(e) => { e.stopPropagation(); void usun(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-rose-300" title="Usuń z biblioteki"><Trash2 size={14} /></button>
                                 </div>
                             </div>
