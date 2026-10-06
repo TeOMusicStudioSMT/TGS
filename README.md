@@ -31,6 +31,11 @@ cp -r dist/* ../TeO_Genesis/public/apps/games/
 | Agenci → TeOgochi Games | `POST /api/cobot/ask` | żywa (wymaga Ollamy) |
 | Galeria Gier | `public/gry/katalog.json` | plik, nie baza |
 | Teleport (odbiór misji) | query params + BroadcastChannel | czyta obie drogi |
+| Droga gry (zakładki 1–8) | — | Galeria → To Get Sauce → Reżyser i GDD → Dyrygent → Obrazy → Assety 3D → Ruch → Krajobrazy → Kodeks buduje |
+| Scenariusz „Teterhia — Wieczna Saga” | `GET /api/gdd/szablony`, `POST /api/gdd/szablon/teterhia` | żywa (projekt + GDD + gałęzie), `docs/TETERHIA_WIECZNA_SAGA.md` |
+| Dyrygent gry | `POST /api/dyrygent/cel {cel:'gra'}`, `/api/dyrygent/zastosuj` | żywa (silniki z sond; modele wymagają Ollamy) |
+| Pracownia obrazów / Krajobrazy | `/api/assety3d/obrazy`, `POST /api/assety3d/generuj {zObrazu, wycinek}` | żywa (wymaga ComfyUI + FLUX.2 klein) |
+| Ruch brył | `/api/assety3d/:id/ruch`, `/api/assety3d/ruchy` | żywa (wymaga Blendera; etap 1 = ruch całej bryły) |
 
 ## Co jest GNIAZDEM PUSTYM (świadomie, bez atrapy)
 

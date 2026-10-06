@@ -24,7 +24,7 @@ export interface Kamien { id: string; tytul: string; opis: string; zadania: Zada
 export interface WpisRozmowy { kiedy: string; kto: 'suweren' | 'rezyser'; tresc: string; }
 export interface Gdd {
     wersja: number; tytul: string; gatunek: string; silnik: string; perspektywa: string; platformy: string[];
-    sekcje: Record<Sekcja, string>; kamienie: Kamien[]; historia: WpisRozmowy[]; zrodlo: string | null; zmieniono: string | null;
+    sekcje: Record<Sekcja, string>; kamienie: Kamien[]; galezie?: Array<{ id: string; nazwa: string; opis: string; propozycje: Array<{ opis: string; styl: string }> }>; historia: WpisRozmowy[]; zrodlo: string | null; zmieniono: string | null;
 }
 export interface SilnikGry { etykieta: string; dostepny: boolean; uwaga: string; }
 export interface Produkcja { stan: 'trwa' | 'gotowe' | 'blad' | 'przerwana'; od: string; koniec?: string; biezace: { kamien: string; zadanie: string } | null; kroki: Array<{ kiedy: string; tekst: string }>; zrobione: number; padlo: number; razem: number; model: string; }
