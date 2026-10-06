@@ -27,6 +27,14 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
     const [silniki, setSilniki] = useState<Record<string, SilnikGry>>({});
     const [modele, setModele] = useState<Silnik[]>([]);
     const [model, setModel] = useState('');
+    // ↻ Zapasowe modele produkcji (pamiętane na urządzeniu): zadanie, na którym główny padł, próbuje następny.
+    const [zapasowe, setZapasowe] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('tgs_zapasowe') || '[]'); } catch { return []; } });
+    const przelaczZapasowy = (m: string) => setZapasowe((z) => {
+        const nowe = z.includes(m) ? z.filter((x) => x !== m) : [...z, m].slice(-3);
+        try { localStorage.setItem('tgs_zapasowe', JSON.stringify(nowe)); } catch { /* bez pamięci */ }
+        return nowe;
+    });
+    const wybranyModel = modele.find((m) => m.model === model);
     const [praca, setPraca] = useState<string | null>(null);   // 'import' | 'plan' | 'rozmowa' | 'zapis'
     const [blad, setBlad] = useState<string | null>(null);
     const [tekstImportu, setTekstImportu] = useState('');
@@ -98,7 +106,7 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
         if (!wybrany) return;
         if (brudne) await zapisz();
         setBlad(null);
-        try { await realizujGdd(wybrany, kamien, model || undefined); setProdukcja(await produkcjaGdd(wybrany)); } catch (e) { setBlad((e as Error).message); }
+        try { await realizujGdd(wybrany, kamien, model || undefined, zapasowe.filter((m) => m !== model && modele.some((x) => x.model === m && x.dostepny))); setProdukcja(await produkcjaGdd(wybrany)); } catch (e) { setBlad((e as Error).message); }
     };
     const przerwij = async () => { if (wybrany) { try { await przerwijGdd(wybrany); } catch (e) { setBlad((e as Error).message); } } };
     const powiedz = async () => {
@@ -194,7 +202,17 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
                         <select value={model} onChange={(e) => setModel(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1.5 text-xs outline-none focus:border-tgs-primary/60">
                             {modele.map((m) => <option key={m.id} value={m.model} disabled={!m.dostepny}>{m.etykieta}{m.domyslny ? ' (domyślny)' : ''}{m.dostepny ? '' : ' — brak klucza'}</option>)}
                         </select>
-                        <p className="text-[10px] leading-snug text-slate-500">Domyślnie lokalnie. Chmura tylko gdy sam ją wybierzesz i jest klucz w Kiblu.</p>
+                        {wybranyModel && <p className={`text-[10px] leading-snug ${/⚠/.test(wybranyModel.uwaga) ? 'text-amber-400' : 'text-slate-500'}`}>{wybranyModel.uwaga}</p>}
+                        <p className="text-[10px] leading-snug text-slate-500">Domyślnie lokalnie. Chmura tylko gdy sam ją wybierzesz, a klucz jest udostępniony mostowi (Hub → TeO Kibel → „🔗 Udostępnij mostowi”).</p>
+                        <p className="pt-1 font-mono text-[10px] uppercase tracking-wider text-slate-500">↻ Zapasowe (gdy zadanie padnie) — max 3</p>
+                        <div className="max-h-32 space-y-0.5 overflow-y-auto">
+                            {modele.filter((m) => m.model !== model).map((m) => (
+                                <label key={m.id} className={`flex items-center gap-1.5 text-[11px] ${m.dostepny ? 'text-slate-300' : 'text-slate-600'}`} title={m.uwaga}>
+                                    <input type="checkbox" disabled={!m.dostepny} checked={zapasowe.includes(m.model)} onChange={() => przelaczZapasowy(m.model)} />
+                                    <span className="truncate">{zapasowe.includes(m.model) ? `${zapasowe.indexOf(m.model) + 1}. ` : ''}{m.etykieta}{/⚠/.test(m.uwaga) ? ' ⚠' : ''}</span>
+                                </label>
+                            ))}
+                        </div>
                     </div>
                 </aside>
 
