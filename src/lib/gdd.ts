@@ -48,6 +48,7 @@ export const importujPlik = (id: string, plik: File, silnik: string, model?: str
 };
 export const planGdd = (id: string, odNowa = false, model?: string) => api<{ gdd: Gdd }>(`${p(id)}/plan`, { method: 'POST', body: JSON.stringify({ odNowa, model }) }).then((d) => d.gdd);
 export const rozmowaGdd = (id: string, wypowiedz: string, historia: WpisRozmowy[], model?: string) => api<{ odpowiedz: string; propozycja: Propozycja | null; model: string }>(`${p(id)}/rozmowa`, { method: 'POST', body: JSON.stringify({ wypowiedz, historia, model }) });
-export const realizujGdd = (id: string, kamien?: string, model?: string) => api<{ start: boolean; zadan: number; model: string }>(`${p(id)}/realizuj`, { method: 'POST', body: JSON.stringify({ kamien, model }) });
+/** `zapasowe` — modele, które próbują zadania, na którym główny padł (najwyżej 3; ten, który zrobi, prowadzi dalej). */
+export const realizujGdd = (id: string, kamien?: string, model?: string, zapasowe: string[] = []) => api<{ start: boolean; zadan: number; model: string; zapasowe: string[] }>(`${p(id)}/realizuj`, { method: 'POST', body: JSON.stringify({ kamien, model, zapasowe }) });
 export const produkcjaGdd = (id: string) => api<{ produkcja: Produkcja | null }>(`${p(id)}/produkcja`).then((d) => d.produkcja);
 export const przerwijGdd = (id: string) => api<{ przerwano: boolean }>(`${p(id)}/przerwij`, { method: 'POST', body: '{}' });
