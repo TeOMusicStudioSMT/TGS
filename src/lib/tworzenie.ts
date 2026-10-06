@@ -58,3 +58,8 @@ export interface Przydzial { agent: string; model: string; powod: string; }
 export interface WynikCelu { cel: string; etykieta: string; agenci: string[] | null; rodzaje: Record<string, RodzajCelu>; brakuje: string[]; moznaRuszyc: boolean; modele?: { przydzial: Przydzial[]; odrzucone?: Array<{ agent?: string; model?: string; powod: string }>; model: string }; modeleUwaga?: string; }
 export const celGra = (zadanie?: string) => post<WynikCelu>('/api/dyrygent/cel', { cel: 'gra', zadanie: zadanie ?? '', modele: !!zadanie });
 export const zastosujPrzydzial = (przydzial: Przydzial[]) => post<{ wynik: Array<{ agent: string; model: string; ok: true | string }> }>('/api/dyrygent/zastosuj', { przydzial }).then((d) => d.wynik);
+
+// ── ⚡ Giełda Master Flow (TeOkoP GRV): zlecenie zadania albo całego projektu — ogłoszenie w wizytówce Katedry ──
+export interface Zlecenie { id: string; rodzaj: 'zadanie' | 'projekt'; tytul: string; opis: string; modele: string[]; budzetGRV: number; stan: 'ogloszone' | 'wycofane'; od: string }
+export const naGielde = (p: { rodzaj: 'zadanie' | 'projekt'; projekt: string; tytul: string; opis?: string; modele?: string[]; budzetGRV?: number }) =>
+    post<{ zlecenie: Zlecenie }>('/api/gielda-mocy/zlecenia', p).then((d) => d.zlecenie);

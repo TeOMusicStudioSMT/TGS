@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clapperboard, FileUp, Loader2, ListChecks, Play, RefreshCw, Save, Send, Square, Cpu, Check } from 'lucide-react';
 import { gry as pobierzGry, silniki as pobierzModele, type ProjektGry, type Silnik } from '../lib/kodeks';
-import { szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
+import { naGielde, szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
 import { SEKCJE, importujPlik, importujTekst, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type WpisRozmowy } from '../lib/gdd';
 
 const STAN_ZADANIA: Record<string, string> = { czeka: 'text-slate-500', trwa: 'text-cyan-300', gotowe: 'text-emerald-300', blad: 'text-rose-300', pominiete: 'text-slate-600 line-through' };
@@ -118,6 +118,18 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
         for (const [k, v] of Object.entries(propozycja.sekcje ?? {})) if (typeof v === 'string' && v.trim()) sekcje[k as Sekcja] = v;
         zmien({ sekcje, ...(propozycja.tytul ? { tytul: propozycja.tytul } : {}), ...(propozycja.gatunek ? { gatunek: propozycja.gatunek } : {}), ...(propozycja.perspektywa ? { perspektywa: propozycja.perspektywa } : {}) });
         setPropozycja(null);
+    };
+    // ⚡ Giełda Master Flow: zadanie albo cały projekt jako zlecenie (ogłoszenie w wizytówce; wykonanie przez inne Katedry = etap 2).
+    const [gielda, setGielda] = useState<string | null>(null);
+    const doGieldy = async (rodzaj: 'zadanie' | 'projekt', tytul: string, opis: string) => {
+        if (!wybrany) return;
+        const budzet = window.prompt(`⚡ Giełda Master Flow — ${rodzaj === 'projekt' ? 'cały projekt' : 'zadanie'} „${tytul.slice(0, 80)}”.\nBudżet w GRV (0 = do ustalenia):`, '0');
+        if (budzet === null) return;
+        setBlad(null);
+        try {
+            const z = await naGielde({ rodzaj, projekt: wybrany, tytul, opis, modele: model && !/^(claude|gemini):/.test(model) ? [model] : [], budzetGRV: Number(budzet) || 0 });   // model Kodeksa = czego zlecenie potrzebuje; chmury nie ogłaszamy
+            setGielda(`⚡ „${z.tytul}” ogłoszone na Giełdzie Master Flow — inne Katedry zobaczą je w Twojej wizytówce (Katedra online + meldunek). Wycofasz w Hubie: karta Wystawy → ⚡.`);
+        } catch (e) { setBlad((e as Error).message); }
     };
     const ustawStanZadania = (kmId: string, zdId: string, stan: 'czeka' | 'pominiete') => {
         if (!gdd) return;
@@ -228,12 +240,14 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
                                 <div className="flex flex-wrap items-center gap-2">
                                     <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><ListChecks size={12} /> Plan produkcji {razem ? `· ${gotowe}/${razem} gotowych` : ''}</p>
                                     <div className="ml-auto flex flex-wrap gap-2">
+                                        <button onClick={() => void doGieldy('projekt', gdd.tytul || wybrany || 'projekt', (gdd.sekcje.wizja || '').slice(0, 600))} disabled={!wybrany} title="Cały projekt na Giełdę Master Flow (zlecenie dla innych Katedr)" className="flex items-center gap-1 rounded-lg border border-yellow-500/40 px-3 py-1.5 text-xs text-yellow-200 hover:bg-yellow-950/30 disabled:opacity-40">⚡ Projekt na Giełdę</button>
                                         <button onClick={() => void plan(gdd.kamienie.length > 0)} disabled={!!praca || produkcja?.stan === 'trwa'} className="flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1.5 text-xs hover:border-tgs-primary/40 disabled:opacity-40">{praca === 'plan' ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />} {gdd.kamienie.length ? 'Plan od nowa' : 'Plan z GDD'}</button>
                                         {produkcja?.stan === 'trwa'
                                             ? <button onClick={przerwij} className="flex items-center gap-1 rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs text-rose-200 hover:bg-rose-950/40"><Square size={14} /> Przerwij po bieżącym</button>
                                             : <button onClick={() => void realizuj()} disabled={!czeka || !!praca} className="flex items-center gap-1 rounded-lg bg-emerald-500/80 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"><Play size={14} /> Realizuj plan ({czeka})</button>}
                                     </div>
                                 </div>
+                                {gielda && <p className="rounded-lg border border-yellow-500/40 bg-yellow-950/20 px-3 py-2 text-xs text-yellow-100">{gielda} <button onClick={() => setGielda(null)} className="ml-2 text-yellow-400/70">✕</button></p>}
                                 {produkcja && (
                                     <div className={`rounded-lg border px-3 py-2 text-xs ${produkcja.stan === 'trwa' ? 'border-cyan-500/40 bg-cyan-950/20' : produkcja.stan === 'gotowe' ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-amber-500/40 bg-amber-950/20'}`}>
                                         <p className="flex items-center gap-2">{produkcja.stan === 'trwa' && <Loader2 size={12} className="animate-spin" />}<span className="font-semibold">Produkcja: {produkcja.stan}</span><span className="text-slate-400">{produkcja.zrobione}/{produkcja.razem} · {produkcja.model}</span></p>
@@ -257,6 +271,7 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
                                                         <li key={z.id} className={`flex items-start gap-2 text-[11px] ${STAN_ZADANIA[z.stan]}`}>
                                                             <span className="font-mono">{ZNAK[z.stan]}</span>
                                                             <span className="min-w-0 flex-1">{z.tresc}{z.uwaga && <span className="ml-1 text-[10px] opacity-70">({z.uwaga})</span>}</span>
+                                                            {z.stan !== 'gotowe' && <button onClick={() => void doGieldy('zadanie', `${k.tytul}: ${z.tresc}`.slice(0, 120), `${z.tresc}\n(${gdd.tytul || wybrany})`.slice(0, 600))} title="To zadanie na Giełdę Master Flow" className="text-yellow-600 hover:text-yellow-300">⚡</button>}
                                                             {produkcja?.stan !== 'trwa' && (z.stan === 'czeka' || z.stan === 'blad'
                                                                 ? <button onClick={() => ustawStanZadania(k.id, z.id, 'pominiete')} title="Pomiń" className="text-slate-600 hover:text-slate-300">–</button>
                                                                 : z.stan === 'pominiete' && <button onClick={() => ustawStanZadania(k.id, z.id, 'czeka')} title="Przywróć" className="text-slate-600 hover:text-slate-300">○</button>)}
