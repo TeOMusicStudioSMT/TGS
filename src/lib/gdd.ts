@@ -19,7 +19,12 @@ export const SEKCJE: Array<{ id: Sekcja; etykieta: string; podpowiedz: string }>
     { id: 'technika', etykieta: 'Kwestie techniczne', podpowiedz: 'Silnik, platformy, ograniczenia, co przepisano.' },
 ];
 
-export interface ZadanieGdd { id: string; tresc: string; stan: 'czeka' | 'trwa' | 'gotowe' | 'blad' | 'pominiete'; uwaga?: string; kiedy?: string | null; zadanieId?: string | null; }
+/** 🧱 Klocek zadania: rzecz z warsztatu (obraz/bryła) z rolą w grze; klucz null = jeszcze jej nie ma. */
+export interface Klocek { rola: string; klucz: string | null; opis: string; }
+export interface ZadanieGdd { id: string; tresc: string; stan: 'czeka' | 'trwa' | 'gotowe' | 'blad' | 'pominiete' | 'klocki'; uwaga?: string; kiedy?: string | null; zadanieId?: string | null; klocki?: Klocek[]; zastepcze?: boolean; }
+export interface KlocekKatalogu { klucz: string; nazwa: string; opis: string; galaz: string | null; stan: 'w-grze' | 'bryla' | 'obraz' | 'koncept'; plik?: string; bryla?: string; obraz?: string; }
+/** Stan klocków zadania względem warsztatu (most: KlockiGry.rozwiaz). */
+export interface StanKlockowZadania { gotowe: Array<{ rola: string; plik: string; opis: string }>; doGry: Array<{ rola: string; bryla: string; opis: string }>; braki: Array<{ rola: string; co: 'bryla' | 'obraz'; opis: string; obraz?: string }>; koncepty: Array<{ rola: string; opis: string }>; }
 export interface Kamien { id: string; tytul: string; opis: string; zadania: ZadanieGdd[]; }
 export interface WpisRozmowy { kiedy: string; kto: 'suweren' | 'rezyser'; tresc: string; }
 export interface Gdd {
@@ -27,7 +32,7 @@ export interface Gdd {
     sekcje: Record<Sekcja, string>; kamienie: Kamien[]; galezie?: Array<{ id: string; nazwa: string; opis: string; propozycje: Array<{ opis: string; styl: string }> }>; historia: WpisRozmowy[]; zrodlo: string | null; zmieniono: string | null;
 }
 export interface SilnikGry { etykieta: string; dostepny: boolean; uwaga: string; }
-export interface Produkcja { stan: 'trwa' | 'gotowe' | 'blad' | 'przerwana'; od: string; koniec?: string; biezace: { kamien: string; zadanie: string } | null; kroki: Array<{ kiedy: string; tekst: string }>; zrobione: number; padlo: number; razem: number; model: string; }
+export interface Produkcja { stan: 'trwa' | 'gotowe' | 'blad' | 'przerwana'; od: string; koniec?: string; biezace: { kamien: string; zadanie: string } | null; kroki: Array<{ kiedy: string; tekst: string }>; zrobione: number; padlo: number; naKlocki?: number; razem: number; model: string; }
 export interface Propozycja { tytul?: string; gatunek?: string; perspektywa?: string; sekcje?: Partial<Record<Sekcja, string>>; }
 
 async function api<T>(sciezka: string, init?: RequestInit): Promise<T> {
@@ -52,3 +57,8 @@ export const rozmowaGdd = (id: string, wypowiedz: string, historia: WpisRozmowy[
 export const realizujGdd = (id: string, kamien?: string, model?: string, zapasowe: string[] = []) => api<{ start: boolean; zadan: number; model: string; zapasowe: string[] }>(`${p(id)}/realizuj`, { method: 'POST', body: JSON.stringify({ kamien, model, zapasowe }) });
 export const produkcjaGdd = (id: string) => api<{ produkcja: Produkcja | null }>(`${p(id)}/produkcja`).then((d) => d.produkcja);
 export const przerwijGdd = (id: string) => api<{ przerwano: boolean }>(`${p(id)}/przerwij`, { method: 'POST', body: '{}' });
+
+// 🧱 Klocki gry — katalog warsztatu, stan klocków zadań, dobór do planu, zgoda na bryły zastępcze.
+export const klockiGdd = (id: string) => api<{ katalog: KlocekKatalogu[]; zadania: Record<string, StanKlockowZadania> }>(`${p(id)}/klocki`);
+export const dobierzKlockiGdd = (id: string, model?: string) => api<{ gdd: Gdd; dobrane: number; model: string }>(`${p(id)}/klocki/dobierz`, { method: 'POST', body: JSON.stringify({ model }) });
+export const ustawZadanieGdd = (id: string, zadanie: string, zmiana: { klocki?: Klocek[]; zastepcze?: boolean }) => api<{ gdd: Gdd }>(`${p(id)}/zadanie/${encodeURIComponent(zadanie)}`, { method: 'POST', body: JSON.stringify(zmiana) }).then((d) => d.gdd);

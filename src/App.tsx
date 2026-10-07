@@ -134,7 +134,7 @@ export default function App() {
         {widok === 'forge' && <Forge />}
         {widok === 'agenci' && <Agenci />}
         {widok === 'kodeks' && <KodeksGra />}
-        {widok === 'gdd' && <RezyserGry wybranaGra={gra} onGra={setGra} />}
+        {widok === 'gdd' && <RezyserGry wybranaGra={gra} onGra={setGra} onPrzejdz={(cel, dane) => { try { localStorage.setItem('tgs_do_pracowni', JSON.stringify(dane)); } catch { /* bez pamięci */ } setWidok(cel); }} />}
         {widok === 'dyrygent' && <DyrygentGry wybranaGra={gra} onGra={setGra} />}
         {widok === 'obrazy' && <PracowniaObrazow wybranaGra={gra} onGra={setGra} />}
         {widok === 'assety' && <Assety3D />}

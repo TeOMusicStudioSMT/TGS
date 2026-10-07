@@ -52,6 +52,24 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
         catch (e) { setBlad((e as Error).message); }
     }, []);
     useEffect(() => { void odswiez(); pobierzGry().then(setGry).catch(() => setGry([])); }, [odswiez]);
+    // 🧱 Z Reżysera („czeka na klocek”): gotowy opis do narysowania albo obraz, z którego trzeba zrobić bryłę.
+    const [doWskazania, setDoWskazania] = useState<string | null>(null);
+    useEffect(() => {
+        if (krajobraz) return;
+        try {
+            const d = JSON.parse(localStorage.getItem('tgs_do_pracowni') || 'null') as { opis?: string; obraz?: string } | null;
+            localStorage.removeItem('tgs_do_pracowni');
+            if (d?.opis) { setOpis(d.opis); setInfo('🧱 Klocek dla Reżysera: opis już wpisany — wybierz styl (pojedynczy = jeden obiekt do 3D) i „Rysuj”.'); }
+            if (d?.obraz) setDoWskazania(d.obraz);
+        } catch { /* bez pamięci */ }
+    }, [krajobraz]);
+    useEffect(() => {
+        if (!doWskazania) return;
+        const o = lista.find((x) => x.id === doWskazania);
+        if (!o) return;
+        setGalaz(''); setWybrany(o); setDoWskazania(null);
+        setInfo('🧱 Klocek dla Reżysera: ten obraz czeka na bryłę — „Do 3D” (karta postaci / zestaw: najpierw zaznacz jeden obiekt).');
+    }, [doWskazania, lista]);
     useEffect(() => {
         if (!wybranaGra) { setGalezie([]); return; }
         galezieProjektu(wybranaGra).then((g) => { setGalezie(g); setGalaz((obecna) => obecna || (krajobraz ? g.find((x) => x.id === 'krainy')?.id ?? '' : '')); }).catch(() => setGalezie([]));

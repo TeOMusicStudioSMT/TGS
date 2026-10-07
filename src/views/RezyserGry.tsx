@@ -12,12 +12,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clapperboard, FileUp, Loader2, ListChecks, Play, RefreshCw, Save, Send, Square, Cpu, Check } from 'lucide-react';
 import { gry as pobierzGry, silniki as pobierzModele, type ProjektGry, type Silnik } from '../lib/kodeks';
 import { naGielde, szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
-import { SEKCJE, importujPlik, importujTekst, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type WpisRozmowy } from '../lib/gdd';
+import { SEKCJE, dobierzKlockiGdd, importujPlik, importujTekst, klockiGdd, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, ustawZadanieGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type StanKlockowZadania, type WpisRozmowy } from '../lib/gdd';
 
-const STAN_ZADANIA: Record<string, string> = { czeka: 'text-slate-500', trwa: 'text-cyan-300', gotowe: 'text-emerald-300', blad: 'text-rose-300', pominiete: 'text-slate-600 line-through' };
-const ZNAK: Record<string, string> = { czeka: '○', trwa: '◐', gotowe: '●', blad: '✗', pominiete: '–' };
+const STAN_ZADANIA: Record<string, string> = { czeka: 'text-slate-500', trwa: 'text-cyan-300', gotowe: 'text-emerald-300', blad: 'text-rose-300', pominiete: 'text-slate-600 line-through', klocki: 'text-amber-300' };
+const ZNAK: Record<string, string> = { czeka: '○', trwa: '◐', gotowe: '●', blad: '✗', pominiete: '–', klocki: '🧱' };
+/** Do produkcji idą też zadania czekające na klocek — most sprawdza je od nowa (może już są). */
+const doZrobienia = (stan: string) => stan === 'czeka' || stan === 'blad' || stan === 'klocki';
 
-export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: string; onGra?: (id: string) => void } = {}) {
+/** Przejście do Pracowni obrazów z gotowym opisem albo wskazanym obrazem (App czyta localStorage). */
+export type Przejscie = (widok: 'obrazy' | 'assety', dane: { opis?: string; obraz?: string }) => void;
+
+export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybranaGra?: string; onGra?: (id: string) => void; onPrzejdz?: Przejscie } = {}) {
     const [lista, setLista] = useState<ProjektGry[] | null>(null);
     const [mostOffline, setMostOffline] = useState(false);
     const [wybrany, setWybrany] = useState<string | null>(null);
@@ -45,6 +50,22 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
     const plikRef = useRef<HTMLInputElement>(null);
     const rozmowaRef = useRef<HTMLDivElement>(null);
     const [szablony, setSzablony] = useState<Szablon[]>([]);
+    // 🧱 Stan klocków zadań względem warsztatu (Pracownia obrazów + Assety 3D) — z mostu, po każdym wczytaniu GDD.
+    const [klocki, setKlocki] = useState<Record<string, StanKlockowZadania>>({});
+    const odswiezKlocki = useCallback(async (id: string) => { try { setKlocki((await klockiGdd(id)).zadania); } catch { setKlocki({}); } }, []);
+    useEffect(() => { if (wybrany && gdd) void odswiezKlocki(wybrany); }, [wybrany, gdd?.zmieniono, odswiezKlocki]); // eslint-disable-line react-hooks/exhaustive-deps
+    const dobierzKlocki = async () => {
+        if (!wybrany) return;
+        if (brudne) await zapisz();
+        setPraca('klocki'); setBlad(null);
+        try { const d = await dobierzKlockiGdd(wybrany, model || undefined); setGdd(d.gdd); setBrudne(false); await odswiezKlocki(wybrany); }
+        catch (e) { setBlad((e as Error).message); } finally { setPraca(null); }
+    };
+    const przelaczZastepcze = async (zdId: string, zastepcze: boolean) => {
+        if (!wybrany) return;
+        if (brudne) await zapisz();
+        try { setGdd(await ustawZadanieGdd(wybrany, zdId, { zastepcze })); setBrudne(false); } catch (e) { setBlad((e as Error).message); }
+    };
 
     const odswiezListe = useCallback(async () => {
         try { setLista(await pobierzGry()); setMostOffline(false); } catch { setLista([]); setMostOffline(true); }
@@ -146,7 +167,9 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
 
     const razem = gdd?.kamienie.reduce((s, k) => s + k.zadania.length, 0) ?? 0;
     const gotowe = gdd?.kamienie.reduce((s, k) => s + k.zadania.filter((z) => z.stan === 'gotowe').length, 0) ?? 0;
-    const czeka = gdd?.kamienie.reduce((s, k) => s + k.zadania.filter((z) => z.stan === 'czeka' || z.stan === 'blad').length, 0) ?? 0;
+    const czeka = gdd?.kamienie.reduce((s, k) => s + k.zadania.filter((z) => doZrobienia(z.stan)).length, 0) ?? 0;
+    const naKlocki = gdd?.kamienie.reduce((s, k) => s + k.zadania.filter((z) => z.stan === 'klocki').length, 0) ?? 0;
+    const bezKlockow = gdd?.kamienie.reduce((s, k) => s + k.zadania.filter((z) => z.stan !== 'gotowe' && z.stan !== 'pominiete' && !z.klocki).length, 0) ?? 0;
 
     return (
         <div className="space-y-4">
@@ -259,12 +282,14 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
                                     <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><ListChecks size={12} /> Plan produkcji {razem ? `· ${gotowe}/${razem} gotowych` : ''}</p>
                                     <div className="ml-auto flex flex-wrap gap-2">
                                         <button onClick={() => void doGieldy('projekt', gdd.tytul || wybrany || 'projekt', (gdd.sekcje.wizja || '').slice(0, 600))} disabled={!wybrany} title="Cały projekt na Giełdę Master Flow (zlecenie dla innych Katedr)" className="flex items-center gap-1 rounded-lg border border-yellow-500/40 px-3 py-1.5 text-xs text-yellow-200 hover:bg-yellow-950/30 disabled:opacity-40">⚡ Projekt na Giełdę</button>
+                                        {gdd.kamienie.length > 0 && <button onClick={() => void dobierzKlocki()} disabled={!!praca || produkcja?.stan === 'trwa'} title="Reżyser dopasuje do zadań klocki z warsztatu (obrazy z Pracowni, bryły z Assetów 3D) i wskaże, czego brakuje — stanów zadań nie rusza" className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs disabled:opacity-40 ${bezKlockow ? 'border-amber-500/50 text-amber-200 hover:bg-amber-950/30' : 'border-slate-700 hover:border-tgs-primary/40'}`}>{praca === 'klocki' ? <Loader2 size={14} className="animate-spin" /> : '🧱'} Dobierz klocki{bezKlockow ? ` (${bezKlockow} bez)` : ''}</button>}
                                         <button onClick={() => void plan(gdd.kamienie.length > 0)} disabled={!!praca || produkcja?.stan === 'trwa'} className="flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1.5 text-xs hover:border-tgs-primary/40 disabled:opacity-40">{praca === 'plan' ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />} {gdd.kamienie.length ? 'Plan od nowa' : 'Plan z GDD'}</button>
                                         {produkcja?.stan === 'trwa'
                                             ? <button onClick={przerwij} className="flex items-center gap-1 rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs text-rose-200 hover:bg-rose-950/40"><Square size={14} /> Przerwij po bieżącym</button>
                                             : <button onClick={() => void realizuj()} disabled={!czeka || !!praca} className="flex items-center gap-1 rounded-lg bg-emerald-500/80 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"><Play size={14} /> Realizuj plan ({czeka})</button>}
                                     </div>
                                 </div>
+                                {naKlocki > 0 && <p className="rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">🧱 {naKlocki} {naKlocki === 1 ? 'zadanie czeka' : 'zadań czeka'} na klocki — najpierw klocki, potem budowanie. Dorób je w Obrazach / Assetach 3D (przyciski przy zadaniu) albo pozwól na bryłę zastępczą; „Realizuj plan” sprawdzi je od nowa.</p>}
                                 {gielda && <p className="rounded-lg border border-yellow-500/40 bg-yellow-950/20 px-3 py-2 text-xs text-yellow-100">{gielda} <button onClick={() => setGielda(null)} className="ml-2 text-yellow-400/70">✕</button></p>}
                                 {produkcja && (
                                     <div className={`rounded-lg border px-3 py-2 text-xs ${produkcja.stan === 'trwa' ? 'border-cyan-500/40 bg-cyan-950/20' : produkcja.stan === 'gotowe' ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-amber-500/40 bg-amber-950/20'}`}>
@@ -282,15 +307,17 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
                                                         <p className="text-[12px] font-semibold text-slate-100">{i + 1}. {k.tytul}</p>
                                                         <p className="text-[11px] text-slate-400">{k.opis}</p>
                                                     </div>
-                                                    {k.zadania.some((z) => z.stan === 'czeka' || z.stan === 'blad') && produkcja?.stan !== 'trwa' && <button onClick={() => void realizuj(k.id)} title="Realizuj tylko ten kamień" className="rounded-md p-1 text-emerald-300 hover:bg-slate-800"><Play size={14} /></button>}
+                                                    {k.zadania.some((z) => doZrobienia(z.stan)) && produkcja?.stan !== 'trwa' && <button onClick={() => void realizuj(k.id)} title="Realizuj tylko ten kamień" className="rounded-md p-1 text-emerald-300 hover:bg-slate-800"><Play size={14} /></button>}
                                                 </div>
                                                 <ul className="mt-1 space-y-0.5">
                                                     {k.zadania.map((z) => (
                                                         <li key={z.id} className={`flex items-start gap-2 text-[11px] ${STAN_ZADANIA[z.stan]}`}>
                                                             <span className="font-mono">{ZNAK[z.stan]}</span>
-                                                            <span className="min-w-0 flex-1">{z.tresc}{z.uwaga && <span className="ml-1 text-[10px] opacity-70">({z.uwaga})</span>}</span>
+                                                            <span className="min-w-0 flex-1">{z.tresc}{z.uwaga && z.stan !== 'klocki' && <span className="ml-1 text-[10px] opacity-70">({z.uwaga})</span>}
+                                                                {z.stan !== 'gotowe' && z.stan !== 'pominiete' && <KlockiZadania stan={klocki[z.id]} maKlocki={!!z.klocki} zastepcze={!!z.zastepcze} onZastepcze={(v) => void przelaczZastepcze(z.id, v)} onPrzejdz={onPrzejdz} />}
+                                                            </span>
                                                             {z.stan !== 'gotowe' && <button onClick={() => void doGieldy('zadanie', `${k.tytul}: ${z.tresc}`.slice(0, 120), `${z.tresc}\n(${gdd.tytul || wybrany})`.slice(0, 600))} title="To zadanie na Giełdę Master Flow" className="text-yellow-600 hover:text-yellow-300">⚡</button>}
-                                                            {produkcja?.stan !== 'trwa' && (z.stan === 'czeka' || z.stan === 'blad'
+                                                            {produkcja?.stan !== 'trwa' && (doZrobienia(z.stan)
                                                                 ? <button onClick={() => ustawStanZadania(k.id, z.id, 'pominiete')} title="Pomiń" className="text-slate-600 hover:text-slate-300">–</button>
                                                                 : z.stan === 'pominiete' && <button onClick={() => ustawStanZadania(k.id, z.id, 'czeka')} title="Przywróć" className="text-slate-600 hover:text-slate-300">○</button>)}
                                                         </li>
@@ -340,4 +367,32 @@ export default function RezyserGry({ wybranaGra = '', onGra }: { wybranaGra?: st
 
 function pusteGdd(): Gdd {
     return { wersja: 1, tytul: '', gatunek: '', silnik: 'three', perspektywa: '', platformy: ['przeglądarka'], sekcje: { wizja: '', mechanika: '', fabula: '', postacie: '', wizual: '', audio: '', technika: '' }, kamienie: [], historia: [], zrodlo: null, zmieniono: null };
+}
+
+/**
+ * 🧱 Klocki zadania: ✅ w grze · 📦 bryła dołoży się sama · 🗿 jest obraz, brak bryły · 🖼️ nie ma nic.
+ * Przy brakach — skrót do Pracowni (z opisem / wskazanym obrazem) i zgoda na bryłę zastępczą z kodu.
+ */
+function KlockiZadania({ stan, maKlocki, zastepcze, onZastepcze, onPrzejdz }: { stan?: StanKlockowZadania; maKlocki: boolean; zastepcze: boolean; onZastepcze: (v: boolean) => void; onPrzejdz?: Przejscie }) {
+    if (!maKlocki) return <span className="ml-1 text-[10px] text-slate-600">· klocki niedobrane</span>;
+    if (!stan) return null;
+    const pozycje = [...stan.gotowe, ...stan.doGry, ...stan.braki, ...stan.koncepty];
+    if (!pozycje.length) return <span className="ml-1 text-[10px] text-slate-600">· bez brył (sam kod)</span>;
+    return (
+        <span className="mt-0.5 flex flex-wrap items-center gap-1">
+            {stan.gotowe.map((k, i) => <span key={`g${i}`} title={k.plik} className="rounded border border-emerald-700/50 px-1.5 text-[10px] text-emerald-300">✅ {k.rola}</span>)}
+            {stan.doGry.map((k, i) => <span key={`d${i}`} title="Bryła jest w Assetach 3D — produkcja sama doda ją do gry" className="rounded border border-sky-700/50 px-1.5 text-[10px] text-sky-300">📦 {k.rola}</span>)}
+            {stan.koncepty.map((k, i) => <span key={`k${i}`} title={k.opis} className="rounded border border-slate-700 px-1.5 text-[10px] text-slate-400">🏞️ {k.rola}</span>)}
+            {stan.braki.map((k, i) => (
+                <button key={`b${i}`} onClick={() => onPrzejdz?.('obrazy', k.co === 'bryla' ? { obraz: k.obraz } : { opis: k.opis })} disabled={!onPrzejdz}
+                    title={k.co === 'bryla' ? `Jest obraz „${k.opis}” — otwórz go w Pracowni i daj „Do 3D”` : `Nie ma nic — narysuj w Pracowni: „${k.opis}”`}
+                    className="rounded border border-amber-600/60 px-1.5 text-[10px] text-amber-200 hover:bg-amber-950/40">{k.co === 'bryla' ? '🗿' : '🖼️'} {k.rola} — {k.co === 'bryla' ? 'zrób bryłę' : 'narysuj'} →</button>
+            ))}
+            {stan.braki.length > 0 && (
+                <label className="flex items-center gap-1 text-[10px] text-slate-400" title="Kodeks zbuduje z bryłą zastępczą z kodu (kapsuła/Box), do podmiany na GLB, gdy klocek powstanie">
+                    <input type="checkbox" checked={zastepcze} onChange={(e) => onZastepcze(e.target.checked)} className="accent-amber-400" /> buduj z zastępczą
+                </label>
+            )}
+        </span>
+    );
 }
