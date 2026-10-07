@@ -7,12 +7,12 @@
  * naprawdę wyszło z TRELLIS.2, nie obrazek. Logika w moście (services/Assety3D.js).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package } from 'lucide-react';
+import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 
 function PodgladGlb({ url }: { url: string | null }) {
     const ref = useRef<HTMLDivElement>(null);
@@ -84,6 +84,14 @@ export default function Assety3D() {
         try { const d = await naStol(a.id, uwagi); setInfo(`🏛️ „${d.karta.tytul}” leży na Stole — przyjmij ją w Katedrze (Stół / StoL), a po ratyfikacji Zlecenia Stada policzą nową wersję.`); }
         catch (e) { setBlad((e as Error).message); }
     };
+    // ✨ Upiększ lokalnie — ta sama bryła z tego samego źródła (opis, nazwa, obraz/wycinek przechodzą same), gęściej.
+    const upiekszaj = async (a: Asset3D) => {
+        const sciany = window.prompt(`✨ Upiększ „${a.nazwa}” lokalnie: rozdzielczość 1024 i więcej trójkątów (stara bryła zostaje).\nIle ścian? (8000 = jak było, 30000 = gęsto, 60000 = bardzo gęsto)`, '30000');
+        if (sciany === null) return;
+        setBlad(null);
+        try { await upiekszLokalnie(a.id, { rozdzielczosc: 1024, sciany: Number(sciany) || 30000 }); setInfo(`✨ „${a.nazwa}” liczy się od nowa w 1024 — nowa bryła pojawi się obok (kilka minut, jeden asset naraz).`); void odswiez(); }
+        catch (e) { setBlad((e as Error).message); }
+    };
     const wSkladnicy = async (a: Asset3D) => {
         setBlad(null);
         try { const d = await doSkladnicy(a.id); setInfo(d.nowy ? `📦 „${a.nazwa}” w Składnicy Katedry (bryły) — Story i inne moduły ją widzą.` : `📦 „${a.nazwa}” już była w Składnicy — dołożone brakujące pliki.`); }
@@ -145,6 +153,7 @@ export default function Assety3D() {
                                 {a.blad && <p className="text-[10px] text-rose-300">{a.blad}</p>}
                                 <div className="flex items-center gap-1">
                                     {a.stan === 'gotowe' && <select defaultValue="" onClick={(e) => e.stopPropagation()} onChange={(e) => { if (e.target.value) { void dodajDoGry(a, e.target.value); e.target.value = ''; } }} className="min-w-0 flex-1 rounded-md border border-slate-700 bg-black/40 px-1 py-1 text-[11px]"><option value="">→ do gry…</option>{gry.map((g) => <option key={g.id} value={g.id}>{g.nazwa}</option>)}</select>}
+                                    {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void upiekszaj(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-fuchsia-300" title="✨ Upiększ lokalnie — ta sama bryła w 1024, więcej trójkątów (stara zostaje)"><Sparkles size={14} /></button>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void doStolu(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-amber-300" title="Na Stół — stado ulepszy bryłę (nowa wersja po ratyfikacji)"><Landmark size={14} /></button>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void wSkladnicy(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-sky-300" title="Do Składnicy Katedry (wspólne bryły)"><Package size={14} /></button>}
                                     <button onClick={(e) => { e.stopPropagation(); void usun(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-rose-300" title="Usuń z biblioteki"><Trash2 size={14} /></button>

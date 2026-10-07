@@ -34,3 +34,5 @@ export const adresPliku = (id: string, plik: 'model.glb' | 'obraz.png', t = 0) =
 export const naStol = (id: string, uwagi: string) => api<{ karta: { id: string; tytul: string } }>(`/api/assety3d/${encodeURIComponent(id)}/na-stol`, { method: 'POST', body: JSON.stringify({ uwagi }) });
 /** 📦 Bryła do Składnicy Katedry (_OtakOs_Assety/bryly) — wspólna dla Story, gier i innych modułów; bez dubli. */
 export const doSkladnicy = (id: string) => api<{ nowy: boolean; asset: { id: string } }>(`/api/assety3d/${encodeURIComponent(id)}/do-skladnicy`, { method: 'POST', body: '{}' });
+/** ✨ Upiększ lokalnie: ta sama bryła z tego samego źródła, gęściej (1024, więcej ścian); stara zostaje. */
+export const upiekszLokalnie = (id: string, p: { rozdzielczosc?: number; sciany?: number } = {}) => api<{ zadanie: string; asset: string }>(`/api/assety3d/${encodeURIComponent(id)}/upiekszaj`, { method: 'POST', body: JSON.stringify(p) });
