@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clapperboard, FileUp, Loader2, ListChecks, Play, RefreshCw, Save, Send, Square, Cpu, Check } from 'lucide-react';
 import { gry as pobierzGry, silniki as pobierzModele, type ProjektGry, type Silnik } from '../lib/kodeks';
 import { naGielde, szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
-import { SEKCJE, dobierzKlockiGdd, importujPlik, importujTekst, klockiGdd, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, ustawZadanieGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type StanKlockowZadania, type WpisRozmowy } from '../lib/gdd';
+import { SEKCJE, dobierzKlockiGdd, krokiKodeksa, type KrokKodeksa, importujPlik, importujTekst, klockiGdd, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, ustawZadanieGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type StanKlockowZadania, type WpisRozmowy } from '../lib/gdd';
 
 const STAN_ZADANIA: Record<string, string> = { czeka: 'text-slate-500', trwa: 'text-cyan-300', gotowe: 'text-emerald-300', blad: 'text-rose-300', pominiete: 'text-slate-600 line-through', klocki: 'text-amber-300' };
 const ZNAK: Record<string, string> = { czeka: '○', trwa: '◐', gotowe: '●', blad: '✗', pominiete: '–', klocki: '🧱' };
@@ -296,6 +296,7 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                                         <p className="flex items-center gap-2">{produkcja.stan === 'trwa' && <Loader2 size={12} className="animate-spin" />}<span className="font-semibold">Produkcja: {produkcja.stan}</span><span className="text-slate-400">{produkcja.zrobione}/{produkcja.razem} · {produkcja.model}</span></p>
                                         {produkcja.biezace && <p className="mt-1 text-slate-300">▶ {produkcja.biezace.kamien}: {produkcja.biezace.zadanie}</p>}
                                         <div className="mt-1 max-h-28 space-y-0.5 overflow-y-auto font-mono text-[10px] text-slate-500">{produkcja.kroki.slice(-8).map((k, i) => <p key={i}>{new Date(k.kiedy).toLocaleTimeString('pl-PL')} {k.tekst}</p>)}</div>
+                                        {wybrany && <CoRobiKodeks projekt={wybrany} trwa={produkcja.stan === 'trwa'} />}
                                     </div>
                                 )}
                                 {gdd.kamienie.length === 0 ? <p className="text-[11px] text-slate-500">Jeszcze bez planu. „Plan z GDD" poprosi Reżysera o 5 kamieni milowych × 2 zadania dla Kodeksa.</p> : (
@@ -394,5 +395,32 @@ function KlockiZadania({ stan, maKlocki, zastepcze, onZastepcze, onPrzejdz }: { 
                 </label>
             )}
         </span>
+    );
+}
+
+/** 🔎 Co robi Kodeks — rozwijane kroki bieżącego zadania (runda, ile znaków napisał, recenzent, build), co 10 s. */
+function CoRobiKodeks({ projekt, trwa }: { projekt: string; trwa: boolean }) {
+    const [otwarte, setOtwarte] = useState(false);
+    const [kroki, setKroki] = useState<KrokKodeksa[]>([]);
+    useEffect(() => {
+        if (!otwarte) return;
+        let zywy = true;
+        const pobierz = () => krokiKodeksa(projekt).then((k) => { if (zywy) setKroki(k); }).catch(() => {});
+        void pobierz();
+        const t = trwa ? setInterval(pobierz, 10_000) : undefined;
+        return () => { zywy = false; if (t) clearInterval(t); };
+    }, [otwarte, projekt, trwa]);
+    const ostatni = kroki.at(-1);
+    return (
+        <details className="mt-1" onToggle={(e) => setOtwarte((e.target as HTMLDetailsElement).open)}>
+            <summary className="cursor-pointer text-[10px] text-cyan-300/80">🔎 co robi Kodeks{ostatni?.znakow ? ` · napisał ${ostatni.znakow} znaków` : ''}</summary>
+            <div className="mt-1 max-h-40 space-y-0.5 overflow-y-auto font-mono text-[10px] text-slate-400">
+                {kroki.length === 0 ? <p>— brak kroków —</p> : kroki.map((k, i) => (
+                    <p key={i} className={k.typ === 'blad' ? 'text-rose-300' : k.typ === 'build' || k.typ === 'koniec' ? 'text-emerald-300' : ''}>
+                        {new Date(k.kiedy).toLocaleTimeString('pl-PL')} {k.tekst.slice(0, 300)}{k.znakow ? ` (${k.znakow} zn.)` : ''}
+                    </p>
+                ))}
+            </div>
+        </details>
     );
 }

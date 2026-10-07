@@ -62,3 +62,12 @@ export const przerwijGdd = (id: string) => api<{ przerwano: boolean }>(`${p(id)}
 export const klockiGdd = (id: string) => api<{ katalog: KlocekKatalogu[]; zadania: Record<string, StanKlockowZadania> }>(`${p(id)}/klocki`);
 export const dobierzKlockiGdd = (id: string, model?: string) => api<{ gdd: Gdd; dobrane: number; model: string }>(`${p(id)}/klocki/dobierz`, { method: 'POST', body: JSON.stringify({ model }) });
 export const ustawZadanieGdd = (id: string, zadanie: string, zmiana: { klocki?: Klocek[]; zastepcze?: boolean }) => api<{ gdd: Gdd }>(`${p(id)}/zadanie/${encodeURIComponent(zadanie)}`, { method: 'POST', body: JSON.stringify(zmiana) }).then((d) => d.gdd);
+/** 🔎 Co robi Kodeks TERAZ: ostatnie zadanie projektu w toku i jego kroki (rundy, znaki, recenzent, build). */
+export interface KrokKodeksa { kiedy: string; typ: string; tekst: string; znakow?: number }
+export async function krokiKodeksa(projekt: string): Promise<KrokKodeksa[]> {
+    const p = await api<{ zadania: Array<{ id: string; stan: string }> }>(`/api/appstudio/projekty/${encodeURIComponent(projekt)}`);
+    const z = [...(p.zadania ?? [])].reverse().find((x) => x.stan === 'trwa') ?? p.zadania?.at(-1);
+    if (!z) return [];
+    const d = await api<{ zadanie: { kroki: KrokKodeksa[] } }>(`/api/appstudio/zadania/${encodeURIComponent(z.id)}`);
+    return d.zadanie?.kroki ?? [];
+}
