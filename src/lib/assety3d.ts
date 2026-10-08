@@ -8,9 +8,10 @@
 import { BRIDGE } from './bridge';
 import type { Pudelko, Sylwetka, UstawieniaKoloru } from './kolorBryly';
 
-export interface Asset3D { id: string; nazwa: string; opis: string; zrodlo: 'tekst' | 'zdjecie' | 'obraz'; tekst: string | null; promptObrazu?: string; sciany: number; rozdzielczosc: number; utworzono: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; czasy: { obraz?: number; '3d'?: number; razem?: number }; rozmiarGlb?: number; wGrach: string[]; ulepsza?: string; poprawki?: Poprawka[]; siatka?: { trojkaty: number; fragment?: InfoFragmentu }; }
+export interface Asset3D { id: string; nazwa: string; opis: string; zrodlo: 'tekst' | 'zdjecie' | 'obraz'; tekst: string | null; promptObrazu?: string; sciany: number; rozdzielczosc: number; utworzono: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; czasy: { obraz?: number; '3d'?: number; razem?: number }; rozmiarGlb?: number; wGrach: string[]; ulepsza?: string; poprawki?: Poprawka[]; siatka?: { trojkaty: number; fragment?: InfoFragmentu; swiatlo?: InfoSwiatla }; }
 /** Poprawki bryły (most: services/Assety3D.js) — kolejne kolory się składają, fragment liczy się ostatni. */
-export type Poprawka = ({ rodzaj: 'kolor' } & UstawieniaKoloru & { kiedy: string }) | { rodzaj: 'fragment'; pudelko: Pudelko; sciany: number; kiedy: string };
+export type Poprawka = ({ rodzaj: 'kolor' } & UstawieniaKoloru & { kiedy: string }) | { rodzaj: 'fragment'; pudelko: Pudelko; sciany: number; kiedy: string } | { rodzaj: 'swiatlo'; pudelko: Pudelko; prog: number; kolor: string | null; moc: number; kiedy: string };
+export interface InfoSwiatla { trojkaty: number; kolor: string; moc: number; srodek: [number, number, number]; promien: number; }
 export interface InfoFragmentu { wMasterze: number; trojkaty: number; reszta: number; granica: number; prosba: number | null; ograniczony: boolean; }
 export interface ZadanieAssetu { id: string; asset: string; stan: 'trwa' | 'gotowe' | 'blad'; etap: string; od: string; koniec: string | null; blad?: string | null; kroki?: Array<{ kiedy: string; etap: string; tekst: string }>; sekundyEtapu?: number; }
 export interface StanAssetow { gotowe: boolean; comfy: boolean; braki: string[]; silnik: string; zadanW_toku: number; }
@@ -46,3 +47,5 @@ export const przekolorujBryle = (id: string, k: UstawieniaKoloru) => api<{ asset
 export const zageszczFragment = (id: string, p: { fragment: Pudelko; scianyFragmentu: number; sciany: number }) => api<{ asset: Asset3D }>(`/api/assety3d/${encodeURIComponent(id)}/fragment`, { method: 'POST', body: JSON.stringify(p) }).then((d) => d.asset);
 /** Ramka sylwetki na obrazie źródłowym — do przeliczenia zaznaczenia na pudełko bryły. */
 export const sylwetkaBryly = (id: string) => api<{ sylwetka: Sylwetka }>(`/api/assety3d/${encodeURIComponent(id)}/sylwetka`).then((d) => d.sylwetka);
+/** ✨ Świecące oko: pudełko + próg jasności 0–1 (świeci tylko jaśniejsze) + kolor #rrggbb (albo null = kolor oka) + moc → NOWA wersja. */
+export const zaswiec = (id: string, p: { fragment: Pudelko; prog: number; kolor: string | null; moc: number }) => api<{ asset: Asset3D }>(`/api/assety3d/${encodeURIComponent(id)}/swiatlo`, { method: 'POST', body: JSON.stringify(p) }).then((d) => d.asset);

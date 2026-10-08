@@ -7,13 +7,13 @@
  * naprawdę wyszło z TRELLIS.2, nie obrazek. Logika w moście (services/Assety3D.js).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles, Palette, ScanSearch, X } from 'lucide-react';
+import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles, Palette, ScanSearch, X, Eye } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, sylwetkaBryly, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
-import { KOLOR_ZERO, bezZmian, przekoloruj, wycinekNaPudelko, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
 
@@ -23,7 +23,10 @@ import { ZaznaczWycinek } from './PracowniaObrazow';
 type Atrybut = THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
 interface KoloryPodgladu { attr: Atrybut; orig: Float32Array; poz: Atrybut; box: THREE.Box3; }
 
-function PodgladGlb({ url, kolor = null, fragment = null }: { url: string | null; kolor?: UstawieniaKoloru | null; fragment?: Pudelko | null }) {
+/** Podgląd świecącego oka: pudełko + próg jasności + barwa (null = jasnożółta) — jak wybierzSwiecace w moście, tylko per wierzchołek. */
+interface PodgladSwiatla { pudelko: Pudelko; prog: number; kolor: string | null; }
+
+function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { url: string | null; kolor?: UstawieniaKoloru | null; fragment?: Pudelko | null; swiatlo?: PodgladSwiatla | null }) {
     const ref = useRef<HTMLDivElement>(null);
     const [info, setInfo] = useState<string>('');
     const siatki = useRef<KoloryPodgladu[]>([]);
@@ -70,6 +73,18 @@ function PodgladGlb({ url, kolor = null, fragment = null }: { url: string | null
     useEffect(() => {
         for (const s of siatki.current) {
             const k = kolor && !bezZmian(kolor) ? przekoloruj(s.orig, kolor) : Float32Array.from(s.orig);
+            if (swiatlo) {
+                const { min, max } = s.box, b = swiatlo.pudelko;
+                const lx = [min.x + b.x0 * (max.x - min.x), min.x + b.x1 * (max.x - min.x)];
+                const ly = [min.y + b.y0 * (max.y - min.y), min.y + b.y1 * (max.y - min.y)];
+                const barwa = (swiatlo.kolor && zHex(swiatlo.kolor)) || [1, 0.75, 0.2];
+                for (let v = 0; v < k.length / 3; v++) {
+                    const x = s.poz.getX(v), y = s.poz.getY(v);
+                    if (x < lx[0] || x > lx[1] || y < ly[0] || y > ly[1]) continue;
+                    if (jasnoscSrgb(k[v * 3], k[v * 3 + 1], k[v * 3 + 2]) < swiatlo.prog) continue;
+                    k[v * 3] = barwa[0]; k[v * 3 + 1] = barwa[1]; k[v * 3 + 2] = barwa[2];
+                }
+            }
             if (fragment) {
                 const { min, max } = s.box;
                 const lx = [min.x + fragment.x0 * (max.x - min.x), min.x + fragment.x1 * (max.x - min.x)];
@@ -82,7 +97,7 @@ function PodgladGlb({ url, kolor = null, fragment = null }: { url: string | null
             for (let v = 0; v < s.attr.count; v++) s.attr.setXYZ(v, k[v * 3], k[v * 3 + 1], k[v * 3 + 2]);
             if ('isInterleavedBufferAttribute' in s.attr && s.attr.isInterleavedBufferAttribute) s.attr.data.needsUpdate = true; else (s.attr as THREE.BufferAttribute).needsUpdate = true;
         }
-    }, [kolor, fragment, wczytano]);
+    }, [kolor, fragment, swiatlo, wczytano]);
     return <div className="relative h-80 w-full overflow-hidden rounded-xl border border-slate-800 bg-black/40"><div ref={ref} className="h-full w-full" />{!url && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">Wybierz asset z biblioteki, żeby obejrzeć GLB.</p>}{info && <p className="absolute bottom-1 left-2 font-mono text-[10px] text-slate-400">{info}</p>}</div>;
 }
 
@@ -109,11 +124,18 @@ export default function Assety3D() {
     const [scianyFr, setScianyFr] = useState(40000);
     const [scianyReszty, setScianyReszty] = useState(15000);
     const [poprawiam, setPoprawiam] = useState(false);
+    // ✨ świecące oko — osobne zaznaczenie, próg jasności, barwa (pusta = kolor oka), moc
+    const [wycinekOka, setWycinekOka] = useState<Wycinek | null>(null);
+    const [progOka, setProgOka] = useState(50);
+    const [kolorOka, setKolorOka] = useState<string>('');
+    const [mocOka, setMocOka] = useState(6);
     useEffect(() => {
-        setKolor(KOLOR_ZERO); setWycinekFr(null); setSylwetka(null);
+        setKolor(KOLOR_ZERO); setWycinekFr(null); setSylwetka(null); setWycinekOka(null);
         if (wybrany?.stan === 'gotowe') sylwetkaBryly(wybrany.id).then(setSylwetka).catch(() => setSylwetka(null));
     }, [wybrany?.id, wybrany?.stan]);
     const pudelkoFr: Pudelko | null = wycinekFr && sylwetka ? wycinekNaPudelko(wycinekFr, sylwetka) : null;
+    const pudelkoOka: Pudelko | null = wycinekOka && sylwetka ? wycinekNaPudelko(wycinekOka, sylwetka) : null;
+    const podgladOka: PodgladSwiatla | null = pudelkoOka ? { pudelko: pudelkoOka, prog: progOka / 100, kolor: kolorOka || null } : null;
 
     const odswiez = useCallback(async () => {
         try { const d = await listaAssetow(); setAssety(d.assety); setZadania(d.zadania); const trwa = d.zadania.find((z) => z.stan === 'trwa'); if (trwa) setBiezace(await zadanieAssetu(trwa.id)); else setBiezace((b) => (b && b.stan === 'trwa' ? null : b)); } catch (e) { setBlad((e as Error).message); }
@@ -169,6 +191,16 @@ export default function Assety3D() {
             const n = await zageszczFragment(wybrany.id, { fragment: pudelkoFr, scianyFragmentu: scianyFr, sciany: scianyFr + scianyReszty });
             const f = n.siatka?.fragment;
             await poNowej(n, `🔍 Nowa wersja „${n.id}”: fragment ${f?.trojkaty.toLocaleString('pl-PL') ?? '?'} ścian, reszta ${f?.reszta.toLocaleString('pl-PL') ?? '?'}${f?.ograniczony ? ` — master miał w tym miejscu tylko ${f.wMasterze.toLocaleString('pl-PL')}, więcej się nie da (gęstszy master: „✨ Upiększ lokalnie” w 1024)` : ''}.`);
+        } catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
+    };
+    const zaswiecOko = async () => {
+        if (!wybrany || !pudelkoOka) return;
+        setBlad(null); setPoprawiam(true);
+        try {
+            const n = await zaswiec(wybrany.id, { fragment: pudelkoOka, prog: progOka / 100, kolor: kolorOka || null, moc: mocOka });
+            const sw = n.siatka?.swiatlo;
+            await poNowej(n, `✨ Nowa wersja „${n.id}”: świeci ${sw?.trojkaty.toLocaleString('pl-PL') ?? '?'} ścian, barwa ${sw?.kolor ?? '?'}, moc ${sw?.moc ?? mocOka}. W grze materiał świeci sam, a „Do gry” mówi Kodeksowi, gdzie postawić światło (nocą mocniej).`);
+            setWycinekOka(null);
         } catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
     };
     const usun = async (a: Asset3D) => { if (!window.confirm(`Usunąć asset „${a.nazwa}" z biblioteki? (kopie w grach zostają)`)) return; try { await usunAsset(a.id); if (wybrany?.id === a.id) setWybrany(null); await odswiez(); } catch (e) { setBlad((e as Error).message); } };
@@ -239,8 +271,8 @@ export default function Assety3D() {
 
                 <aside className="space-y-2">
                     <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Gamepad2 size={12} /> Podgląd GLB {wybrany ? `· ${wybrany.nazwa}` : ''}</p>
-                    <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono)) : null} kolor={kolor} fragment={pudelkoFr} />
-                    {wybrany?.poprawki?.length ? <p className="text-[10px] text-slate-500">Wersja z poprawkami: {wybrany.poprawki.map((p) => p.rodzaj === 'kolor' ? '🎨 kolor' : `🔍 fragment ${p.sciany.toLocaleString('pl-PL')}`).join(' → ')}{wybrany.ulepsza ? ` (z ${wybrany.ulepsza})` : ''}</p> : null}
+                    <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono)) : null} kolor={kolor} fragment={pudelkoFr} swiatlo={podgladOka} />
+                    {wybrany?.poprawki?.length ? <p className="text-[10px] text-slate-500">Wersja z poprawkami: {wybrany.poprawki.map((p) => p.rodzaj === 'kolor' ? '🎨 kolor' : p.rodzaj === 'swiatlo' ? `✨ oko ${p.kolor ?? 'auto'}` : `🔍 fragment ${p.sciany.toLocaleString('pl-PL')}`).join(' → ')}{wybrany.ulepsza ? ` (z ${wybrany.ulepsza})` : ''}</p> : null}
                     {wybrany?.stan === 'gotowe' && (
                         <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
                             <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Palette size={12} /> Kolor bryły · podgląd na żywo</p>
@@ -273,6 +305,24 @@ export default function Assety3D() {
                                 <button onClick={() => void zageszcz()} disabled={!pudelkoFr || poprawiam} className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-fuchsia-400/60 py-1 text-xs text-fuchsia-200 hover:bg-fuchsia-500/10 disabled:opacity-40">{poprawiam ? <Loader2 size={12} className="animate-spin" /> : <ScanSearch size={12} />} Zagęść fragment → nowa wersja</button>
                             </div>
                             {wybrany.siatka?.fragment && <p className="font-mono text-[10px] text-slate-400">ta wersja: fragment {wybrany.siatka.fragment.trojkaty.toLocaleString('pl-PL')} ścian (w masterze {wybrany.siatka.fragment.wMasterze.toLocaleString('pl-PL')}), reszta {wybrany.siatka.fragment.reszta.toLocaleString('pl-PL')}</p>}
+                        </div>
+                    )}
+                    {wybrany?.stan === 'gotowe' && (
+                        <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
+                            <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Eye size={12} /> Świecące oko</p>
+                            <p className="text-[10px] leading-snug text-slate-500">Zaznacz na obrazie samo oko (z małym marginesem). Świeci tylko to, co jaśniejsze niż próg — ciemne futro wokół zostaje. Na bryle zobaczysz, co zaświeci.</p>
+                            <ZaznaczWycinek src={adresPliku(wybrany.id, 'obraz.png')} wycinek={wycinekOka} onZmiana={setWycinekOka} />
+                            <label className="flex items-center gap-2 text-[11px] text-slate-400"><span className="w-20">Próg jasności</span><input type="range" min={0} max={95} step={1} value={progOka} onChange={(e) => setProgOka(Number(e.target.value))} className="min-w-0 flex-1 accent-amber-300" /><span className="w-9 text-right font-mono text-[10px]">{progOka}</span></label>
+                            <label className="flex items-center gap-2 text-[11px] text-slate-400"><span className="w-20">Moc</span><input type="range" min={1} max={20} step={1} value={mocOka} onChange={(e) => setMocOka(Number(e.target.value))} className="min-w-0 flex-1 accent-amber-300" /><span className="w-9 text-right font-mono text-[10px]">{mocOka}</span></label>
+                            <label className="flex items-center gap-2 text-[11px] text-slate-400"><span className="w-20">Barwa</span>
+                                <input type="checkbox" checked={!!kolorOka} onChange={(e) => setKolorOka(e.target.checked ? '#ffd23f' : '')} /> własna
+                                {kolorOka ? <input type="color" value={kolorOka} onChange={(e) => setKolorOka(e.target.value)} className="h-5 w-10 cursor-pointer rounded border border-slate-700 bg-transparent" /> : <span className="text-[10px] text-slate-500">(kolor oka z bryły)</span>}
+                            </label>
+                            <div className="flex gap-2">
+                                {wycinekOka && <button onClick={() => setWycinekOka(null)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-slate-500" title="Wyczyść zaznaczenie"><X size={12} /></button>}
+                                <button onClick={() => void zaswiecOko()} disabled={!pudelkoOka || poprawiam} className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-amber-300/60 py-1 text-xs text-amber-200 hover:bg-amber-400/10 disabled:opacity-40">{poprawiam ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Zaświeć → nowa wersja</button>
+                            </div>
+                            {wybrany.siatka?.swiatlo && <p className="font-mono text-[10px] text-slate-400">ta wersja świeci: {wybrany.siatka.swiatlo.trojkaty.toLocaleString('pl-PL')} ścian, {wybrany.siatka.swiatlo.kolor}, moc {wybrany.siatka.swiatlo.moc}</p>}
                         </div>
                     )}
                     {wybrany?.promptObrazu && <p className="text-[10px] leading-snug text-slate-500">prompt: {wybrany.promptObrazu}</p>}

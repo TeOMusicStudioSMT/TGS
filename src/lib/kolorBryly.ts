@@ -16,6 +16,13 @@ const doSrgb = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.
 const doLin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const obetnij = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lumi = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/** Jasność barwy liniowej w sRGB (0–1) — próg świecącego oka liczy się tak samo w moście (wybierzSwiecace). */
+export const jasnoscSrgb = (r: number, g: number, b: number) => lumi(doSrgb(r), doSrgb(g), doSrgb(b));
+/** #rrggbb → barwa liniowa (jak zHex w moście). */
+export function zHex(h: string): [number, number, number] | null {
+    const m = /^#?([0-9a-f]{6})$/i.exec(h || '');
+    return m ? ([0, 2, 4].map((i) => doLin(parseInt(m[1].slice(i, i + 2), 16) / 255)) as [number, number, number]) : null;
+}
 
 function obrocOdcien(r: number, g: number, b: number, stopnie: number): [number, number, number] {
     const a = (stopnie * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
