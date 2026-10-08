@@ -7,12 +7,12 @@
  * naprawdę wyszło z TRELLIS.2, nie obrazek. Logika w moście (services/Assety3D.js).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles, Palette, ScanSearch, X, Eye } from 'lucide-react';
+import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles, Palette, ScanSearch, X, Eye, Cloud } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
@@ -133,6 +133,19 @@ export default function Assety3D() {
     // Głębokość: zaznaczenie na obrazie przebija bryłę na wylot; TRELLIS.2 potrafi przenieść poświatę oka
     // na potylicę (kot TeOgochi, 2026-10-08) — „przód” bierze tylko przednią część (+Z), „tył” tylną.
     const [glebiaOka, setGlebiaOka] = useState<'cala' | 'przod' | 'tyl'>('przod');
+    // ☁️ chmura (Meshy): rodzaj, ustawienia, wycena (koszt i saldo PRZED wysłaniem), zadanie w tle
+    const [chmuraKlucz, setChmuraKlucz] = useState<boolean | null>(null);
+    const [rodzajChmury, setRodzajChmury] = useState<'retekstura' | 'remesh'>('retekstura');
+    const [stylChmury, setStylChmury] = useState('');
+    const [rozdzChmury, setRozdzChmury] = useState<'2k' | '4k' | '8k'>('2k');
+    const [pbrChmury, setPbrChmury] = useState(false);
+    const [scianyChmury, setScianyChmury] = useState(30000);
+    const [topologiaChmury, setTopologiaChmury] = useState<'triangle' | 'quad'>('triangle');
+    const [wycenaCh, setWycenaCh] = useState<WycenaChmury | null>(null);
+    const [zadanieCh, setZadanieCh] = useState<ZadanieChmury | null>(null);
+    useEffect(() => { stanChmury().then((s) => setChmuraKlucz(s.maKlucz)).catch(() => setChmuraKlucz(null)); }, []);
+    useEffect(() => { setWycenaCh(null); }, [wybrany?.id, rodzajChmury, stylChmury, rozdzChmury, pbrChmury, scianyChmury, topologiaChmury]);
+    const zlecenieChmury = (): ZlecenieChmury => rodzajChmury === 'retekstura' ? { rodzaj: 'retekstura', styl: stylChmury, rozdzielczosc: rozdzChmury, pbr: pbrChmury } : { rodzaj: 'remesh', sciany: scianyChmury, topologia: topologiaChmury };
     useEffect(() => {
         setKolor(KOLOR_ZERO); setWycinekFr(null); setSylwetka(null); setWycinekOka(null);
         if (wybrany?.stan === 'gotowe') sylwetkaBryly(wybrany.id).then(setSylwetka).catch(() => setSylwetka(null));
@@ -208,6 +221,32 @@ export default function Assety3D() {
             setWycinekOka(null);
         } catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
     };
+    const wycenChmury = async () => {
+        if (!wybrany) return;
+        setBlad(null); setPoprawiam(true);
+        try { setWycenaCh(await wycenChmure(wybrany.id, zlecenieChmury())); } catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
+    };
+    const wyslijDoChmury = async () => {
+        if (!wybrany || !wycenaCh) return;
+        if (!window.confirm(`☁️ Wysłać „${wybrany.nazwa}” do Meshy?\n\n${rodzajChmury === 'retekstura' ? `Retekstura ${rozdzChmury}${pbrChmury ? ' + PBR' : ''}` : `Remesh ${scianyChmury.toLocaleString('pl-PL')} ścian (${topologiaChmury === 'quad' ? 'czworokąty' : 'trójkąty'})`}\nKoszt: ${wycenaCh.kredyty} kredytów (≈ $${wycenaCh.usdOkolo}) — saldo ${wycenaCh.saldo}.\nBryła (${wycenaCh.mb} MB) wyjdzie z Katedry do chmury Meshy. Wynik wróci jako nowa wersja, stara zostaje.`)) return;
+        setBlad(null);
+        try {
+            const z = await zlecChmure(wybrany.id, zlecenieChmury(), wycenaCh.kredyty);
+            setZadanieCh(z); setWycenaCh(null);
+            setInfo(`☁️ Meshy liczy (${wycenaCh.kredyty} kredytów) — nowa wersja pojawi się sama w bibliotece.`);
+        } catch (e) { setBlad((e as Error).message); }
+    };
+    useEffect(() => {
+        if (!zadanieCh || zadanieCh.stan === 'gotowe' || zadanieCh.stan === 'blad') return;
+        const t = setInterval(async () => {
+            try {
+                const z = await zadanieChmury(zadanieCh.id); setZadanieCh(z);
+                if (z.stan === 'gotowe' && z.asset) { await odswiez(); const d = await listaAssetow(); const n = d.assety.find((a) => a.id === z.asset); if (n) setWybrany(n); setInfo(`☁️ Gotowe: nowa wersja „${z.asset}” z Meshy (${z.kredyty} kredytów).`); }
+                if (z.stan === 'blad') setBlad(`☁️ Meshy: ${z.blad}`);
+            } catch { /* most chwilowo */ }
+        }, 5000);
+        return () => clearInterval(t);
+    }, [zadanieCh, odswiez]);
     const usun = async (a: Asset3D) => { if (!window.confirm(`Usunąć asset „${a.nazwa}" z biblioteki? (kopie w grach zostają)`)) return; try { await usunAsset(a.id); if (wybrany?.id === a.id) setWybrany(null); await odswiez(); } catch (e) { setBlad((e as Error).message); } };
 
     const trwa = biezace?.stan === 'trwa';
@@ -278,7 +317,8 @@ export default function Assety3D() {
                     <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Gamepad2 size={12} /> Podgląd GLB {wybrany ? `· ${wybrany.nazwa}` : ''}</p>
                     <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono)) : null} kolor={kolor} fragment={pudelkoFr} swiatlo={podgladOka} />
                     {wybrany?.poprawki?.length ? <p className="text-[10px] text-slate-500">Wersja z poprawkami: {wybrany.poprawki.map((p) => p.rodzaj === 'kolor' ? '🎨 kolor' : p.rodzaj === 'swiatlo' ? `✨ oko ${p.kolor ?? 'auto'}` : `🔍 fragment ${p.sciany.toLocaleString('pl-PL')}`).join(' → ')}{wybrany.ulepsza ? ` (z ${wybrany.ulepsza})` : ''}</p> : null}
-                    {wybrany?.stan === 'gotowe' && (
+                    {wybrany?.tekstury && <p className="rounded-lg border border-sky-700/40 bg-sky-950/30 p-2 text-[11px] text-sky-200">☁️ Wersja z chmury ({wybrany.chmura?.usluga} · {wybrany.chmura?.rodzaj}) ma tekstury — kolor, fragment i oko działają na wersji sprzed chmury ({wybrany.ulepsza}).</p>}
+                    {wybrany?.stan === 'gotowe' && !wybrany.tekstury && (
                         <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
                             <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Palette size={12} /> Kolor bryły · podgląd na żywo</p>
                             {([['czern', 'Podnieś czerń', 100, 0], ['jasnosc', 'Jasność', 100, -100], ['kontrast', 'Kontrast', 100, -100], ['nasycenie', 'Nasycenie', 100, -100], ['odcien', 'Odcień', 180, -180]] as const).map(([k, etykieta, zakres, od]) => (
@@ -295,7 +335,7 @@ export default function Assety3D() {
                             </div>
                         </div>
                     )}
-                    {wybrany?.stan === 'gotowe' && (
+                    {wybrany?.stan === 'gotowe' && !wybrany.tekstury && (
                         <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
                             <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><ScanSearch size={12} /> Gęściej we fragmencie</p>
                             <p className="text-[10px] leading-snug text-slate-500">Zaznacz myszą na obrazie fragment (np. głowę) — na bryle zaświeci na różowo. Fragment dostaje własny budżet ścian, reszta swój; szew zostaje spięty. Fragment obejmuje całą głębokość bryły.</p>
@@ -313,6 +353,35 @@ export default function Assety3D() {
                         </div>
                     )}
                     {wybrany?.stan === 'gotowe' && (
+                        <div className="space-y-1.5 rounded-xl border border-sky-800/60 bg-tgs-panel/60 p-3">
+                            <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Cloud size={12} /> Dopracuj w chmurze · Meshy</p>
+                            {chmuraKlucz === false && <p className="text-[11px] text-amber-300/90">Brak klucza Meshy w moście — Hub → TeO Kibel → wklej klucz <code>msy_…</code> → „🔗 Udostępnij mostowi”. API Meshy wymaga płatnego planu (Pro: 1000 kredytów / $20).</p>}
+                            <div className="flex gap-2 text-[11px]">
+                                {(['retekstura', 'remesh'] as const).map((r) => <button key={r} onClick={() => setRodzajChmury(r)} className={`rounded-lg border px-2 py-1 ${rodzajChmury === r ? 'border-sky-400 text-sky-200' : 'border-slate-700 text-slate-400'}`}>{r === 'retekstura' ? '🎨 Retekstura' : '🔺 Remesh'}</button>)}
+                            </div>
+                            {rodzajChmury === 'retekstura' ? (<>
+                                <textarea value={stylChmury} onChange={(e) => setStylChmury(e.target.value)} rows={2} maxLength={800} placeholder="Styl tekstur, np. „czarna sierść mieniąca się jak opal, świecące bursztynowe środkowe oko”" className="w-full resize-none rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-[11px] outline-none" />
+                                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                    <select value={rozdzChmury} onChange={(e) => setRozdzChmury(e.target.value as '2k' | '4k' | '8k')} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="2k">2K (10 kr.)</option><option value="4k">4K (10 kr.)</option><option value="8k">8K (15 kr.)</option></select>
+                                    <label className="flex items-center gap-1"><input type="checkbox" checked={pbrChmury} onChange={(e) => setPbrChmury(e.target.checked)} /> PBR (metal, chropowatość, normalne)</label>
+                                </div>
+                            </>) : (
+                                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                    <select value={scianyChmury} onChange={(e) => setScianyChmury(Number(e.target.value))} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{[5000, 15000, 30000, 60000, 100000].map((n) => <option key={n} value={n}>{n.toLocaleString('pl-PL')} ścian</option>)}</select>
+                                    <select value={topologiaChmury} onChange={(e) => setTopologiaChmury(e.target.value as 'triangle' | 'quad')} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="triangle">trójkąty</option><option value="quad">czworokąty</option></select>
+                                    <span>5 kredytów</span>
+                                </div>
+                            )}
+                            {wycenaCh && <p className={`text-[11px] ${wycenaCh.wystarczy && !wycenaCh.zaDuzy ? 'text-emerald-300' : 'text-amber-300'}`}>💰 {wycenaCh.kredyty} kredytów (≈ ${wycenaCh.usdOkolo}) · saldo Meshy {wycenaCh.saldo}{!wycenaCh.wystarczy ? ' — za mało' : ''} · plik {wycenaCh.mb} MB{wycenaCh.zaDuzy ? ' — za duży, najpierw uprość' : ''}</p>}
+                            <div className="flex gap-2">
+                                <button onClick={() => void wycenChmury()} disabled={!chmuraKlucz || poprawiam || (rodzajChmury === 'retekstura' && stylChmury.trim().length < 3)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-sky-400 disabled:opacity-40">💰 Wyceń</button>
+                                <button onClick={() => void wyslijDoChmury()} disabled={!wycenaCh || !wycenaCh.wystarczy || wycenaCh.zaDuzy || (!!zadanieCh && zadanieCh.stan !== 'gotowe' && zadanieCh.stan !== 'blad')} className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-sky-600/70 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"><Cloud size={12} /> {wycenaCh ? `Wyślij za ${wycenaCh.kredyty} kredytów` : 'Najpierw wyceń'}</button>
+                            </div>
+                            {zadanieCh && zadanieCh.stan !== 'gotowe' && <p className="font-mono text-[10px] text-sky-300">{zadanieCh.stan === 'blad' ? `⚠ ${zadanieCh.blad}` : `☁️ ${zadanieCh.stan} · ${zadanieCh.postep}%`}</p>}
+                            <p className="text-[10px] leading-snug text-slate-500">Bryła wychodzi z Katedry do Meshy dopiero po „Wyślij” i potwierdzeniu kwoty. Wynik ma tekstury i wraca jako nowa wersja obok starej.</p>
+                        </div>
+                    )}
+                    {wybrany?.stan === 'gotowe' && !wybrany.tekstury && (
                         <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
                             <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Eye size={12} /> Świecące oko</p>
                             <p className="text-[10px] leading-snug text-slate-500">Zaznacz na obrazie samo oko (z małym marginesem). Świeci tylko to, co jaśniejsze niż próg — ciemne futro wokół zostaje. Na bryle zobaczysz, co zaświeci.</p>

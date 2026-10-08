@@ -8,7 +8,7 @@
 import { BRIDGE } from './bridge';
 import type { Pudelko, Sylwetka, UstawieniaKoloru } from './kolorBryly';
 
-export interface Asset3D { id: string; nazwa: string; opis: string; zrodlo: 'tekst' | 'zdjecie' | 'obraz'; tekst: string | null; promptObrazu?: string; sciany: number; rozdzielczosc: number; utworzono: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; czasy: { obraz?: number; '3d'?: number; razem?: number }; rozmiarGlb?: number; wGrach: string[]; ulepsza?: string; poprawki?: Poprawka[]; siatka?: { trojkaty: number; fragment?: InfoFragmentu; swiatlo?: InfoSwiatla }; }
+export interface Asset3D { id: string; nazwa: string; opis: string; zrodlo: 'tekst' | 'zdjecie' | 'obraz'; tekst: string | null; promptObrazu?: string; sciany: number; rozdzielczosc: number; utworzono: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; czasy: { obraz?: number; '3d'?: number; razem?: number }; rozmiarGlb?: number; wGrach: string[]; ulepsza?: string; poprawki?: Poprawka[]; siatka?: { trojkaty: number; fragment?: InfoFragmentu; swiatlo?: InfoSwiatla }; tekstury?: boolean; chmura?: { usluga: string; rodzaj: string; kredyty: number; kiedy: string }; }
 /** Poprawki bryły (most: services/Assety3D.js) — kolejne kolory się składają, fragment liczy się ostatni. */
 export type Poprawka = ({ rodzaj: 'kolor' } & UstawieniaKoloru & { kiedy: string }) | { rodzaj: 'fragment'; pudelko: Pudelko; sciany: number; kiedy: string } | { rodzaj: 'swiatlo'; pudelko: Pudelko; prog: number; kolor: string | null; moc: number; kiedy: string };
 export interface InfoSwiatla { trojkaty: number; kolor: string; moc: number; srodek: [number, number, number]; promien: number; }
@@ -49,3 +49,12 @@ export const zageszczFragment = (id: string, p: { fragment: Pudelko; scianyFragm
 export const sylwetkaBryly = (id: string) => api<{ sylwetka: Sylwetka }>(`/api/assety3d/${encodeURIComponent(id)}/sylwetka`).then((d) => d.sylwetka);
 /** ✨ Świecące oko: pudełko + próg jasności 0–1 (świeci tylko jaśniejsze) + kolor #rrggbb (albo null = kolor oka) + moc → NOWA wersja. */
 export const zaswiec = (id: string, p: { fragment: Pudelko; prog: number; kolor: string | null; moc: number }) => api<{ asset: Asset3D }>(`/api/assety3d/${encodeURIComponent(id)}/swiatlo`, { method: 'POST', body: JSON.stringify(p) }).then((d) => d.asset);
+
+// ☁️ Dopracowanie w chmurze (Meshy, most: services/ChmuraBryl.js) — wycena → zgoda na kwotę → zlecenie w tle → nowa wersja.
+export type ZlecenieChmury = { rodzaj: 'retekstura'; styl: string; rozdzielczosc: '2k' | '4k' | '8k'; pbr: boolean } | { rodzaj: 'remesh'; sciany: number; topologia: 'triangle' | 'quad' };
+export interface WycenaChmury { kredyty: number; usdOkolo: number; saldo: number; wystarczy: boolean; mb: number; zaDuzy: boolean; cennik: string }
+export interface ZadanieChmury { id: string; bryla: string; stan: string; postep: number; kredyty: number; asset: string | null; blad: string | null }
+export const stanChmury = () => api<{ maKlucz: boolean; usdZaKredyt: number; zadania: ZadanieChmury[] }>('/api/assety3d/chmura');
+export const wycenChmure = (id: string, zlecenie: ZlecenieChmury) => api<WycenaChmury>(`/api/assety3d/chmura/${encodeURIComponent(id)}/wycena`, { method: 'POST', body: JSON.stringify({ zlecenie }) });
+export const zlecChmure = (id: string, zlecenie: ZlecenieChmury, zgodaKredyty: number) => api<{ zadanie: ZadanieChmury }>(`/api/assety3d/chmura/${encodeURIComponent(id)}/zlec`, { method: 'POST', body: JSON.stringify({ zlecenie, zgodaKredyty }) }).then((d) => d.zadanie);
+export const zadanieChmury = (id: string) => api<{ zadanie: ZadanieChmury }>(`/api/assety3d/chmura/zadanie/${encodeURIComponent(id)}`).then((d) => d.zadanie);
