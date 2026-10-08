@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
@@ -143,7 +143,12 @@ export default function Assety3D() {
     const [topologiaChmury, setTopologiaChmury] = useState<'triangle' | 'quad'>('triangle');
     const [wycenaCh, setWycenaCh] = useState<WycenaChmury | null>(null);
     const [zadanieCh, setZadanieCh] = useState<ZadanieChmury | null>(null);
+    // 🏷️ Zwiadowca: kody rabatowe Meshy (ostatni zwiad z mostu; nowe szukanie = wyszukiwanie w sieci przez API Claude, grosze)
+    const [promocje, setPromocje] = useState<ZwiadPromocji | null>(null);
+    const [szukamPromocji, setSzukamPromocji] = useState(false);
+    const [bladPromocji, setBladPromocji] = useState<string | null>(null);
     useEffect(() => { stanChmury().then((s) => setChmuraKlucz(s.maKlucz)).catch(() => setChmuraKlucz(null)); }, []);
+    useEffect(() => { zwiadyPromocji().then((z) => setPromocje(z.find((x) => /meshy/i.test(x.usluga)) ?? null)).catch(() => {}); }, []);
     useEffect(() => { setWycenaCh(null); }, [wybrany?.id, rodzajChmury, stylChmury, rozdzChmury, pbrChmury, scianyChmury, topologiaChmury]);
     const zlecenieChmury = (): ZlecenieChmury => rodzajChmury === 'retekstura' ? { rodzaj: 'retekstura', styl: stylChmury, rozdzielczosc: rozdzChmury, pbr: pbrChmury } : { rodzaj: 'remesh', sciany: scianyChmury, topologia: topologiaChmury };
     useEffect(() => {
@@ -225,6 +230,12 @@ export default function Assety3D() {
         if (!wybrany) return;
         setBlad(null); setPoprawiam(true);
         try { setWycenaCh(await wycenChmure(wybrany.id, zlecenieChmury())); } catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
+    };
+    const szukajKodowMeshy = async () => {
+        setSzukamPromocji(true); setBladPromocji(null);
+        try { setPromocje(await szukajPromocji('Meshy (meshy.ai, API do brył 3D)')); }
+        catch (e) { setBladPromocji(e instanceof Error ? e.message : String(e)); }
+        finally { setSzukamPromocji(false); }
     };
     const wyslijDoChmury = async () => {
         if (!wybrany || !wycenaCh) return;
@@ -379,6 +390,21 @@ export default function Assety3D() {
                             </div>
                             {zadanieCh && zadanieCh.stan !== 'gotowe' && <p className="font-mono text-[10px] text-sky-300">{zadanieCh.stan === 'blad' ? `⚠ ${zadanieCh.blad}` : `☁️ ${zadanieCh.stan} · ${zadanieCh.postep}%`}</p>}
                             <p className="text-[10px] leading-snug text-slate-500">Bryła wychodzi z Katedry do Meshy dopiero po „Wyślij” i potwierdzeniu kwoty. Wynik ma tekstury i wraca jako nowa wersja obok starej.</p>
+                            <div className="space-y-1 border-t border-slate-800 pt-1.5">
+                                <button onClick={() => void szukajKodowMeshy()} disabled={szukamPromocji} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] hover:border-amber-300 disabled:opacity-40">{szukamPromocji ? <Loader2 size={11} className="animate-spin" /> : '🏷️'} Zwiadowca: szukaj kodów Meshy</button>
+                                {bladPromocji && <p className="text-[10px] text-amber-300">⚠ {bladPromocji}</p>}
+                                {promocje && (<>
+                                    <p className="text-[10px] text-slate-500">{new Date(promocje.kiedy).toLocaleString('pl-PL')} · {promocje.koszt.wyszukan} wyszukań (≈ ${promocje.koszt.usdWyszukiwania} + tokeny){promocje.odrzucone.length ? ` · ${promocje.odrzucone.length} odrzucone bez źródła` : ''}</p>
+                                    {promocje.znalezione.length === 0 && <p className="text-[11px] text-slate-400">Nic ze źródłem. {promocje.podsumowanie}</p>}
+                                    {promocje.znalezione.map((z, i) => (
+                                        <div key={i} className="rounded-lg border border-slate-800 bg-black/30 px-2 py-1 text-[11px]">
+                                            <p className="text-slate-200">{z.kod ? <code className="mr-1 rounded bg-amber-500/20 px-1 text-amber-200">{z.kod}</code> : null}{z.rabat ? <b className="mr-1 text-emerald-300">{z.rabat}</b> : null}{z.opis}</p>
+                                            <p className="text-[10px] text-slate-500">{z.pewnosc === 'oficjalne' ? '✅ oficjalne' : z.pewnosc === 'forum' ? '💬 forum' : '🧾 agregator'}{z.data || z.wiekStrony ? ` · ${z.data ?? z.wiekStrony}` : ''}{z.uwagi ? ` · ${z.uwagi}` : ''} · <a href={z.zrodlo} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline">{z.tytulZrodla ?? 'źródło'}</a></p>
+                                        </div>
+                                    ))}
+                                    <p className="text-[10px] leading-snug text-slate-500">{promocje.uwaga}</p>
+                                </>)}
+                            </div>
                         </div>
                     )}
                     {wybrany?.stan === 'gotowe' && !wybrany.tekstury && (

@@ -57,4 +57,9 @@ export interface ZadanieChmury { id: string; bryla: string; stan: string; postep
 export const stanChmury = () => api<{ maKlucz: boolean; usdZaKredyt: number; zadania: ZadanieChmury[] }>('/api/assety3d/chmura');
 export const wycenChmure = (id: string, zlecenie: ZlecenieChmury) => api<WycenaChmury>(`/api/assety3d/chmura/${encodeURIComponent(id)}/wycena`, { method: 'POST', body: JSON.stringify({ zlecenie }) });
 export const zlecChmure = (id: string, zlecenie: ZlecenieChmury, zgodaKredyty: number) => api<{ zadanie: ZadanieChmury }>(`/api/assety3d/chmura/${encodeURIComponent(id)}/zlec`, { method: 'POST', body: JSON.stringify({ zlecenie, zgodaKredyty }) }).then((d) => d.zadanie);
+// 🏷️ Zwiadowca promocji (most: services/ZwiadowcaPromocji.js) — kody i promocje ze źródłami z wyszukiwania; nic nie wpisuje, nie płaci.
+export interface ZnaleziskoPromocji { rodzaj: 'kod' | 'promocja' | 'program' | 'partnerska'; kod: string | null; opis: string; rabat: string | null; zrodlo: string; tytulZrodla: string | null; wiekStrony: string | null; data: string | null; pewnosc: 'oficjalne' | 'agregator' | 'forum'; uwagi: string | null }
+export interface ZwiadPromocji { usluga: string; kiedy: string; znalezione: ZnaleziskoPromocji[]; odrzucone: (ZnaleziskoPromocji & { powod: string })[]; podsumowanie: string; koszt: { wyszukan: number; tokenyWe: number; tokenyWy: number; usdWyszukiwania: number }; uwaga: string }
+export const zwiadyPromocji = () => api<{ zwiady: ZwiadPromocji[] }>('/api/zwiadowca/promocje').then((d) => d.zwiady);
+export const szukajPromocji = (usluga: string) => api<{ zwiad: ZwiadPromocji }>('/api/zwiadowca/promocje', { method: 'POST', body: JSON.stringify({ usluga }) }).then((d) => d.zwiad);
 export const zadanieChmury = (id: string) => api<{ zadanie: ZadanieChmury }>(`/api/assety3d/chmura/zadanie/${encodeURIComponent(id)}`).then((d) => d.zadanie);
