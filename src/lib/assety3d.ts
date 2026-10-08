@@ -6,8 +6,12 @@
  * projektu i Kodeks widzi go w prompcie.
  */
 import { BRIDGE } from './bridge';
+import type { Pudelko, Sylwetka, UstawieniaKoloru } from './kolorBryly';
 
-export interface Asset3D { id: string; nazwa: string; opis: string; zrodlo: 'tekst' | 'zdjecie' | 'obraz'; tekst: string | null; promptObrazu?: string; sciany: number; rozdzielczosc: number; utworzono: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; czasy: { obraz?: number; '3d'?: number; razem?: number }; rozmiarGlb?: number; wGrach: string[]; }
+export interface Asset3D { id: string; nazwa: string; opis: string; zrodlo: 'tekst' | 'zdjecie' | 'obraz'; tekst: string | null; promptObrazu?: string; sciany: number; rozdzielczosc: number; utworzono: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; czasy: { obraz?: number; '3d'?: number; razem?: number }; rozmiarGlb?: number; wGrach: string[]; ulepsza?: string; poprawki?: Poprawka[]; siatka?: { trojkaty: number; fragment?: InfoFragmentu }; }
+/** Poprawki bryły (most: services/Assety3D.js) — kolejne kolory się składają, fragment liczy się ostatni. */
+export type Poprawka = ({ rodzaj: 'kolor' } & UstawieniaKoloru & { kiedy: string }) | { rodzaj: 'fragment'; pudelko: Pudelko; sciany: number; kiedy: string };
+export interface InfoFragmentu { wMasterze: number; trojkaty: number; reszta: number; granica: number; prosba: number | null; ograniczony: boolean; }
 export interface ZadanieAssetu { id: string; asset: string; stan: 'trwa' | 'gotowe' | 'blad'; etap: string; od: string; koniec: string | null; blad?: string | null; kroki?: Array<{ kiedy: string; etap: string; tekst: string }>; sekundyEtapu?: number; }
 export interface StanAssetow { gotowe: boolean; comfy: boolean; braki: string[]; silnik: string; zadanW_toku: number; }
 
@@ -36,3 +40,9 @@ export const naStol = (id: string, uwagi: string) => api<{ karta: { id: string; 
 export const doSkladnicy = (id: string) => api<{ nowy: boolean; asset: { id: string } }>(`/api/assety3d/${encodeURIComponent(id)}/do-skladnicy`, { method: 'POST', body: '{}' });
 /** ✨ Upiększ lokalnie: ta sama bryła z tego samego źródła, gęściej (1024, więcej ścian); stara zostaje. */
 export const upiekszLokalnie = (id: string, p: { rozdzielczosc?: number; sciany?: number } = {}) => api<{ zadanie: string; asset: string }>(`/api/assety3d/${encodeURIComponent(id)}/upiekszaj`, { method: 'POST', body: JSON.stringify(p) });
+/** 🎨 Kolor bryły → NOWA wersja obok starej (sekundy, bez GPU). */
+export const przekolorujBryle = (id: string, k: UstawieniaKoloru) => api<{ asset: Asset3D }>(`/api/assety3d/${encodeURIComponent(id)}/kolor`, { method: 'POST', body: JSON.stringify(k) }).then((d) => d.asset);
+/** 🔍 Gęściej we fragmencie (pudełko w ułamkach ramki bryły) → NOWA wersja; `sciany` = całość. */
+export const zageszczFragment = (id: string, p: { fragment: Pudelko; scianyFragmentu: number; sciany: number }) => api<{ asset: Asset3D }>(`/api/assety3d/${encodeURIComponent(id)}/fragment`, { method: 'POST', body: JSON.stringify(p) }).then((d) => d.asset);
+/** Ramka sylwetki na obrazie źródłowym — do przeliczenia zaznaczenia na pudełko bryły. */
+export const sylwetkaBryly = (id: string) => api<{ sylwetka: Sylwetka }>(`/api/assety3d/${encodeURIComponent(id)}/sylwetka`).then((d) => d.sylwetka);

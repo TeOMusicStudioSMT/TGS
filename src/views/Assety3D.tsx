@@ -7,16 +7,27 @@
  * naprawdę wyszło z TRELLIS.2, nie obrazek. Logika w moście (services/Assety3D.js).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles } from 'lucide-react';
+import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles, Palette, ScanSearch, X } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, sylwetkaBryly, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { KOLOR_ZERO, bezZmian, przekoloruj, wycinekNaPudelko, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
+import type { Wycinek } from '../lib/tworzenie';
+import { ZaznaczWycinek } from './PracowniaObrazow';
 
-function PodgladGlb({ url }: { url: string | null }) {
+/** Kolory wierzchołków każdej siatki podglądu: oryginał (z pliku) + ramka geometrii — pod suwaki koloru i fragment. */
+// Atrybuty bywają PRZEPLECIONE (GLB z mostu: pozycja i kolor w jednym buforze) — `.array` to wtedy cały bufor,
+// więc czytamy i piszemy wyłącznie przez getX/setXYZ (zmierzone 2026-10-08: `.array` dawał „kolory” −0,5).
+type Atrybut = THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
+interface KoloryPodgladu { attr: Atrybut; orig: Float32Array; poz: Atrybut; box: THREE.Box3; }
+
+function PodgladGlb({ url, kolor = null, fragment = null }: { url: string | null; kolor?: UstawieniaKoloru | null; fragment?: Pudelko | null }) {
     const ref = useRef<HTMLDivElement>(null);
     const [info, setInfo] = useState<string>('');
+    const siatki = useRef<KoloryPodgladu[]>([]);
+    const [wczytano, setWczytano] = useState(0);
     useEffect(() => {
         const el = ref.current; if (!el || !url) return;
         const w = el.clientWidth, h = el.clientHeight || 320;
@@ -32,15 +43,46 @@ function PodgladGlb({ url }: { url: string | null }) {
             model = g.scene;
             const box = new THREE.Box3().setFromObject(model); const size = box.getSize(new THREE.Vector3()); const s = 1 / Math.max(size.x, size.y, size.z, 1e-6);
             model.scale.setScalar(s); const box2 = new THREE.Box3().setFromObject(model); const c = box2.getCenter(new THREE.Vector3()); model.position.sub(c); model.position.y += (box2.max.y - box2.min.y) / 2;
-            let tri = 0; model.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && m.geometry) { tri += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; if (!(m.material as THREE.Material)?.type) m.material = new THREE.MeshStandardMaterial({ vertexColors: true }); } });
+            let tri = 0; siatki.current = [];
+            model.traverse((o) => {
+                const m = o as THREE.Mesh;
+                if (!m.isMesh || !m.geometry) return;
+                tri += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
+                if (!(m.material as THREE.Material)?.type) m.material = new THREE.MeshStandardMaterial({ vertexColors: true });
+                const c = m.geometry.getAttribute('color') as Atrybut | undefined;
+                if (c && c.itemSize >= 3) {
+                    const orig = new Float32Array(c.count * 3);
+                    for (let v = 0; v < c.count; v++) { orig[v * 3] = c.getX(v); orig[v * 3 + 1] = c.getY(v); orig[v * 3 + 2] = c.getZ(v); }
+                    m.geometry.computeBoundingBox();
+                    siatki.current.push({ attr: c, orig, poz: m.geometry.getAttribute('position') as Atrybut, box: m.geometry.boundingBox!.clone() });
+                }
+            });
+            setWczytano((n) => n + 1);
             setInfo(`${Math.round(tri)} trójkątów · ${size.x.toFixed(2)}×${size.y.toFixed(2)}×${size.z.toFixed(2)}`);
             scena.add(model);
             (window as unknown as { __podglad?: unknown }).__podglad = { model, kamera, ctrl };   // do podglądu z konsoli / testów
         }, undefined, (e) => setInfo(`nie wczytałem GLB: ${(e as Error).message ?? e}`));
         const petla = () => { if (!zywy) return; ctrl.update(); if (model) model.rotation.y += 0.002; renderer.render(scena, kamera); requestAnimationFrame(petla); };
         petla();
-        return () => { zywy = false; ctrl.dispose(); renderer.dispose(); el.innerHTML = ''; };
+        return () => { zywy = false; siatki.current = []; ctrl.dispose(); renderer.dispose(); el.innerHTML = ''; };
     }, [url]);
+    // 🎨 kolor na żywo (ta sama matematyka co most) + 🔍 fragment podświetlony na różowo
+    useEffect(() => {
+        for (const s of siatki.current) {
+            const k = kolor && !bezZmian(kolor) ? przekoloruj(s.orig, kolor) : Float32Array.from(s.orig);
+            if (fragment) {
+                const { min, max } = s.box;
+                const lx = [min.x + fragment.x0 * (max.x - min.x), min.x + fragment.x1 * (max.x - min.x)];
+                const ly = [min.y + fragment.y0 * (max.y - min.y), min.y + fragment.y1 * (max.y - min.y)];
+                for (let v = 0; v < k.length / 3; v++) {
+                    const x = s.poz.getX(v), y = s.poz.getY(v);
+                    if (x >= lx[0] && x <= lx[1] && y >= ly[0] && y <= ly[1]) { k[v * 3] = k[v * 3] * 0.45 + 0.5; k[v * 3 + 1] *= 0.45; k[v * 3 + 2] = k[v * 3 + 2] * 0.45 + 0.5; }
+                }
+            }
+            for (let v = 0; v < s.attr.count; v++) s.attr.setXYZ(v, k[v * 3], k[v * 3 + 1], k[v * 3 + 2]);
+            if ('isInterleavedBufferAttribute' in s.attr && s.attr.isInterleavedBufferAttribute) s.attr.data.needsUpdate = true; else (s.attr as THREE.BufferAttribute).needsUpdate = true;
+        }
+    }, [kolor, fragment, wczytano]);
     return <div className="relative h-80 w-full overflow-hidden rounded-xl border border-slate-800 bg-black/40"><div ref={ref} className="h-full w-full" />{!url && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">Wybierz asset z biblioteki, żeby obejrzeć GLB.</p>}{info && <p className="absolute bottom-1 left-2 font-mono text-[10px] text-slate-400">{info}</p>}</div>;
 }
 
@@ -60,6 +102,18 @@ export default function Assety3D() {
     const [info, setInfo] = useState<string | null>(null);
     const [wysylam, setWysylam] = useState(false);
     const plikRef = useRef<HTMLInputElement>(null);
+    // 🎨🔍 poprawki wybranej bryły — podgląd na żywo, zapis = NOWA wersja obok starej
+    const [kolor, setKolor] = useState<UstawieniaKoloru>(KOLOR_ZERO);
+    const [wycinekFr, setWycinekFr] = useState<Wycinek | null>(null);
+    const [sylwetka, setSylwetka] = useState<Sylwetka | null>(null);
+    const [scianyFr, setScianyFr] = useState(40000);
+    const [scianyReszty, setScianyReszty] = useState(15000);
+    const [poprawiam, setPoprawiam] = useState(false);
+    useEffect(() => {
+        setKolor(KOLOR_ZERO); setWycinekFr(null); setSylwetka(null);
+        if (wybrany?.stan === 'gotowe') sylwetkaBryly(wybrany.id).then(setSylwetka).catch(() => setSylwetka(null));
+    }, [wybrany?.id, wybrany?.stan]);
+    const pudelkoFr: Pudelko | null = wycinekFr && sylwetka ? wycinekNaPudelko(wycinekFr, sylwetka) : null;
 
     const odswiez = useCallback(async () => {
         try { const d = await listaAssetow(); setAssety(d.assety); setZadania(d.zadania); const trwa = d.zadania.find((z) => z.stan === 'trwa'); if (trwa) setBiezace(await zadanieAssetu(trwa.id)); else setBiezace((b) => (b && b.stan === 'trwa' ? null : b)); } catch (e) { setBlad((e as Error).message); }
@@ -96,6 +150,26 @@ export default function Assety3D() {
         setBlad(null);
         try { const d = await doSkladnicy(a.id); setInfo(d.nowy ? `📦 „${a.nazwa}” w Składnicy Katedry (bryły) — Story i inne moduły ją widzą.` : `📦 „${a.nazwa}” już była w Składnicy — dołożone brakujące pliki.`); }
         catch (e) { setBlad((e as Error).message); }
+    };
+    const poNowej = async (n: Asset3D, opis: string) => {
+        await odswiez();
+        setWybrany(n);
+        setInfo(opis);
+    };
+    const zapiszKolor = async () => {
+        if (!wybrany) return;
+        setBlad(null); setPoprawiam(true);
+        try { const n = await przekolorujBryle(wybrany.id, kolor); await poNowej(n, `🎨 Nowa wersja „${n.id}” z poprawionym kolorem — stara bryła została. Do gry wyślij tę, która Ci się podoba.`); }
+        catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
+    };
+    const zageszcz = async () => {
+        if (!wybrany || !pudelkoFr) return;
+        setBlad(null); setPoprawiam(true);
+        try {
+            const n = await zageszczFragment(wybrany.id, { fragment: pudelkoFr, scianyFragmentu: scianyFr, sciany: scianyFr + scianyReszty });
+            const f = n.siatka?.fragment;
+            await poNowej(n, `🔍 Nowa wersja „${n.id}”: fragment ${f?.trojkaty.toLocaleString('pl-PL') ?? '?'} ścian, reszta ${f?.reszta.toLocaleString('pl-PL') ?? '?'}${f?.ograniczony ? ` — master miał w tym miejscu tylko ${f.wMasterze.toLocaleString('pl-PL')}, więcej się nie da (gęstszy master: „✨ Upiększ lokalnie” w 1024)` : ''}.`);
+        } catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
     };
     const usun = async (a: Asset3D) => { if (!window.confirm(`Usunąć asset „${a.nazwa}" z biblioteki? (kopie w grach zostają)`)) return; try { await usunAsset(a.id); if (wybrany?.id === a.id) setWybrany(null); await odswiez(); } catch (e) { setBlad((e as Error).message); } };
 
@@ -165,8 +239,42 @@ export default function Assety3D() {
 
                 <aside className="space-y-2">
                     <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Gamepad2 size={12} /> Podgląd GLB {wybrany ? `· ${wybrany.nazwa}` : ''}</p>
-                    <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono)) : null} />
-                    {wybrany && <img src={adresPliku(wybrany.id, 'obraz.png')} alt="" className="w-full rounded-xl border border-slate-800 bg-black/40 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+                    <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono)) : null} kolor={kolor} fragment={pudelkoFr} />
+                    {wybrany?.poprawki?.length ? <p className="text-[10px] text-slate-500">Wersja z poprawkami: {wybrany.poprawki.map((p) => p.rodzaj === 'kolor' ? '🎨 kolor' : `🔍 fragment ${p.sciany.toLocaleString('pl-PL')}`).join(' → ')}{wybrany.ulepsza ? ` (z ${wybrany.ulepsza})` : ''}</p> : null}
+                    {wybrany?.stan === 'gotowe' && (
+                        <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
+                            <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Palette size={12} /> Kolor bryły · podgląd na żywo</p>
+                            {([['czern', 'Podnieś czerń', 100, 0], ['jasnosc', 'Jasność', 100, -100], ['kontrast', 'Kontrast', 100, -100], ['nasycenie', 'Nasycenie', 100, -100], ['odcien', 'Odcień', 180, -180]] as const).map(([k, etykieta, zakres, od]) => (
+                                <label key={k} className="flex items-center gap-2 text-[11px] text-slate-400">
+                                    <span className="w-20">{etykieta}</span>
+                                    <input type="range" min={od} max={zakres} step={1} value={k === 'odcien' ? kolor.odcien : Math.round(kolor[k] * 100)} onChange={(e) => { const v = Number(e.target.value); setKolor((o) => ({ ...o, [k]: k === 'odcien' ? v : v / 100 })); }} className="min-w-0 flex-1 accent-fuchsia-400" />
+                                    <span className="w-9 text-right font-mono text-[10px]">{k === 'odcien' ? `${kolor.odcien}°` : Math.round(kolor[k] * 100)}</span>
+                                </label>
+                            ))}
+                            <label className="flex items-center gap-2 text-[11px] text-slate-400"><input type="checkbox" checked={kolor.auto} onChange={(e) => setKolor((o) => ({ ...o, auto: e.target.checked }))} /> Auto-poziomy (rozciągnij ciemne barwy na pełny zakres)</label>
+                            <div className="flex gap-2">
+                                <button onClick={() => setKolor(KOLOR_ZERO)} disabled={bezZmian(kolor) || poprawiam} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-slate-500 disabled:opacity-40">Wyzeruj</button>
+                                <button onClick={() => void zapiszKolor()} disabled={bezZmian(kolor) || poprawiam} className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-fuchsia-500/80 py-1 text-xs font-semibold text-black hover:bg-fuchsia-400 disabled:opacity-40">{poprawiam ? <Loader2 size={12} className="animate-spin" /> : <Palette size={12} />} Zapisz jako nową wersję</button>
+                            </div>
+                        </div>
+                    )}
+                    {wybrany?.stan === 'gotowe' && (
+                        <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
+                            <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><ScanSearch size={12} /> Gęściej we fragmencie</p>
+                            <p className="text-[10px] leading-snug text-slate-500">Zaznacz myszą na obrazie fragment (np. głowę) — na bryle zaświeci na różowo. Fragment dostaje własny budżet ścian, reszta swój; szew zostaje spięty. Fragment obejmuje całą głębokość bryły.</p>
+                            <ZaznaczWycinek src={adresPliku(wybrany.id, 'obraz.png')} wycinek={wycinekFr} onZmiana={setWycinekFr} />
+                            {sylwetka && !sylwetka.pewna && <p className="text-[10px] text-amber-300/80">Nie rozpoznałem sylwetki na obrazie (tło nie jest białe) — zaznaczenie liczę względem całego obrazu, może być przesunięte.</p>}
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="text-[10px] text-slate-500">Ścian fragmentu<select value={scianyFr} onChange={(e) => setScianyFr(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs">{[20000, 40000, 60000, 100000].map((n) => <option key={n} value={n}>{n.toLocaleString('pl-PL')}</option>)}</select></label>
+                                <label className="text-[10px] text-slate-500">Ścian reszty<select value={scianyReszty} onChange={(e) => setScianyReszty(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs">{[4000, 8000, 15000, 30000].map((n) => <option key={n} value={n}>{n.toLocaleString('pl-PL')}</option>)}</select></label>
+                            </div>
+                            <div className="flex gap-2">
+                                {wycinekFr && <button onClick={() => setWycinekFr(null)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-slate-500" title="Wyczyść zaznaczenie"><X size={12} /></button>}
+                                <button onClick={() => void zageszcz()} disabled={!pudelkoFr || poprawiam} className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-fuchsia-400/60 py-1 text-xs text-fuchsia-200 hover:bg-fuchsia-500/10 disabled:opacity-40">{poprawiam ? <Loader2 size={12} className="animate-spin" /> : <ScanSearch size={12} />} Zagęść fragment → nowa wersja</button>
+                            </div>
+                            {wybrany.siatka?.fragment && <p className="font-mono text-[10px] text-slate-400">ta wersja: fragment {wybrany.siatka.fragment.trojkaty.toLocaleString('pl-PL')} ścian (w masterze {wybrany.siatka.fragment.wMasterze.toLocaleString('pl-PL')}), reszta {wybrany.siatka.fragment.reszta.toLocaleString('pl-PL')}</p>}
+                        </div>
+                    )}
                     {wybrany?.promptObrazu && <p className="text-[10px] leading-snug text-slate-500">prompt: {wybrany.promptObrazu}</p>}
                 </aside>
             </div>

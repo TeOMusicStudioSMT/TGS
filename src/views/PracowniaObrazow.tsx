@@ -13,7 +13,7 @@ import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
 import { adresObrazu, brylaZObrazu, galezieProjektu, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
 
 /** Zaznaczanie wycinka myszą na obrazie — ułamki 0–1 względem obrazu. */
-function ZaznaczWycinek({ src, wycinek, onZmiana }: { src: string; wycinek: Wycinek | null; onZmiana: (w: Wycinek | null) => void }) {
+export function ZaznaczWycinek({ src, wycinek, onZmiana }: { src: string; wycinek: Wycinek | null; onZmiana: (w: Wycinek | null) => void }) {
     const ref = useRef<HTMLDivElement>(null);
     const start = useRef<{ x: number; y: number } | null>(null);
     const pkt = (e: React.PointerEvent) => {
