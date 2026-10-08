@@ -138,15 +138,30 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
         try {
             const r = await rozmowaGdd(wybrany, tresc, rozmowa, model || undefined);
             setRozmowa([...historia, { kiedy: new Date().toISOString(), kto: 'rezyser', tresc: r.odpowiedz }]);
-            if (r.propozycja && (r.propozycja.sekcje || r.propozycja.tytul)) setPropozycja(r.propozycja);
+            // ⚠️ Dawniej tylko sekcje/tytuł — propozycja z samymi KAMIENIAMI (plan) była po cichu wyrzucana (Suweren 2026-10-08:
+            // „nie widzę tych zmian na panelu… realizuj plan wciąż 0”), a „Wpisz do GDD” kamieni i tak nie przenosiło.
+            if (r.propozycja && (r.propozycja.sekcje || r.propozycja.tytul || r.propozycja.kamienie?.length)) setPropozycja(r.propozycja);
         } catch (e) { setBlad((e as Error).message); } finally { setPraca(null); }
     };
-    const wpiszPropozycje = () => {
-        if (!propozycja || !gdd) return;
+    const wpiszPropozycje = async () => {
+        if (!propozycja || !gdd || !wybrany) return;
         const sekcje = { ...gdd.sekcje };
         for (const [k, v] of Object.entries(propozycja.sekcje ?? {})) if (typeof v === 'string' && v.trim()) sekcje[k as Sekcja] = v;
-        zmien({ sekcje, ...(propozycja.tytul ? { tytul: propozycja.tytul } : {}), ...(propozycja.gatunek ? { gatunek: propozycja.gatunek } : {}), ...(propozycja.perspektywa ? { perspektywa: propozycja.perspektywa } : {}) });
+        const nowy: Gdd = { ...gdd, sekcje, ...(propozycja.tytul ? { tytul: propozycja.tytul } : {}), ...(propozycja.gatunek ? { gatunek: propozycja.gatunek } : {}), ...(propozycja.perspektywa ? { perspektywa: propozycja.perspektywa } : {}), ...(propozycja.kamienie?.length ? { kamienie: propozycja.kamienie } : {}) };
         setPropozycja(null);
+        // Zapis od razu: plan (kamienie) ma być w moście, zanim ktoś kliknie „Realizuj plan”.
+        setGdd(nowy); setPraca('zapis');
+        try { setGdd(await zapiszGdd(wybrany, nowy)); setBrudne(false); } catch (e) { setBrudne(true); setBlad((e as Error).message); } finally { setPraca(null); }
+    };
+    /** Opis propozycji: sekcje, tytuł i ile kamieni/zadań dochodzi do planu. */
+    const opisPropozycji = (pr: Propozycja) => {
+        const czesci = [...(pr.tytul ? ['tytuł'] : []), ...Object.keys(pr.sekcje ?? {})];
+        if (pr.kamienie?.length && gdd) {
+            const noweKamienie = pr.kamienie.filter((k) => !gdd.kamienie.some((s) => s.id === k.id)).length;
+            const zadan = (ks: { zadania: unknown[] }[]) => ks.reduce((n, k) => n + k.zadania.length, 0);
+            czesci.push(`plan: ${pr.kamienie.length} kamieni${noweKamienie ? ` (+${noweKamienie} nowe)` : ''}, zadań ${zadan(gdd.kamienie)} → ${zadan(pr.kamienie)}`);
+        }
+        return czesci.join(', ');
     };
     // ⚡ Giełda Master Flow: zadanie albo cały projekt jako zlecenie (ogłoszenie w wizytówce; wykonanie przez inne Katedry = etap 2).
     const [gielda, setGielda] = useState<string | null>(null);
@@ -345,12 +360,12 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                                         <p className="whitespace-pre-wrap leading-relaxed">{w.tresc}</p>
                                     </div>
                                 ))}
-                        {praca === 'rozmowa' && <p className="flex items-center gap-2 text-slate-500"><Loader2 size={12} className="animate-spin" /> Reżyser myśli (lokalny model — bywa minuta)…</p>}
+                        {praca === 'rozmowa' && <p className="flex items-center gap-2 text-slate-500"><Loader2 size={12} className="animate-spin" /> Reżyser myśli{model && /^(claude|gemini):/.test(model) ? ' (chmura)' : ' (lokalny model — bywa minuta)'}…</p>}
                         {propozycja && (
                             <div className="rounded-lg border border-tgs-primary/40 bg-tgs-primary/10 p-2">
-                                <p className="text-[11px] text-slate-300">Reżyser proponuje zmiany: {[...(propozycja.tytul ? ['tytuł'] : []), ...Object.keys(propozycja.sekcje ?? {})].join(', ')}</p>
+                                <p className="text-[11px] text-slate-300">Reżyser proponuje zmiany: {opisPropozycji(propozycja)}</p>
                                 <div className="mt-1 flex gap-2">
-                                    <button onClick={wpiszPropozycje} className="flex items-center gap-1 rounded-md bg-tgs-primary/80 px-2 py-1 text-[11px] font-semibold text-black hover:bg-tgs-primary"><Check size={12} /> Wpisz do GDD</button>
+                                    <button onClick={() => void wpiszPropozycje()} className="flex items-center gap-1 rounded-md bg-tgs-primary/80 px-2 py-1 text-[11px] font-semibold text-black hover:bg-tgs-primary"><Check size={12} /> Wpisz do GDD</button>
                                     <button onClick={() => setPropozycja(null)} className="rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800">Odrzuć</button>
                                 </div>
                             </div>

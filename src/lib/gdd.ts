@@ -33,7 +33,8 @@ export interface Gdd {
 }
 export interface SilnikGry { etykieta: string; dostepny: boolean; uwaga: string; }
 export interface Produkcja { stan: 'trwa' | 'gotowe' | 'blad' | 'przerwana'; od: string; koniec?: string; biezace: { kamien: string; zadanie: string } | null; kroki: Array<{ kiedy: string; tekst: string }>; zrobione: number; padlo: number; naKlocki?: number; razem: number; model: string; }
-export interface Propozycja { tytul?: string; gatunek?: string; perspektywa?: string; sekcje?: Partial<Record<Sekcja, string>>; }
+/** Propozycja Reżysera. `kamienie` = PEŁNY plan po scaleniu w moście (Gdd.scalKamienie: gotowe zadania zachowują stan). */
+export interface Propozycja { tytul?: string; gatunek?: string; perspektywa?: string; sekcje?: Partial<Record<Sekcja, string>>; kamienie?: Kamien[]; }
 
 async function api<T>(sciezka: string, init?: RequestInit): Promise<T> {
     const r = await fetch(`${BRIDGE}${sciezka}`, { headers: init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }, ...init });
