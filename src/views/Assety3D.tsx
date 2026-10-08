@@ -77,10 +77,11 @@ function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { ur
                 const { min, max } = s.box, b = swiatlo.pudelko;
                 const lx = [min.x + b.x0 * (max.x - min.x), min.x + b.x1 * (max.x - min.x)];
                 const ly = [min.y + b.y0 * (max.y - min.y), min.y + b.y1 * (max.y - min.y)];
+                const lz = [min.z + (b.z0 ?? 0) * (max.z - min.z), min.z + (b.z1 ?? 1) * (max.z - min.z)];
                 const barwa = (swiatlo.kolor && zHex(swiatlo.kolor)) || [1, 0.75, 0.2];
                 for (let v = 0; v < k.length / 3; v++) {
-                    const x = s.poz.getX(v), y = s.poz.getY(v);
-                    if (x < lx[0] || x > lx[1] || y < ly[0] || y > ly[1]) continue;
+                    const x = s.poz.getX(v), y = s.poz.getY(v), z = s.poz.getZ(v);
+                    if (x < lx[0] || x > lx[1] || y < ly[0] || y > ly[1] || z < lz[0] || z > lz[1]) continue;
                     if (jasnoscSrgb(k[v * 3], k[v * 3 + 1], k[v * 3 + 2]) < swiatlo.prog) continue;
                     k[v * 3] = barwa[0]; k[v * 3 + 1] = barwa[1]; k[v * 3 + 2] = barwa[2];
                 }
@@ -129,12 +130,16 @@ export default function Assety3D() {
     const [progOka, setProgOka] = useState(50);
     const [kolorOka, setKolorOka] = useState<string>('');
     const [mocOka, setMocOka] = useState(6);
+    // Głębokość: zaznaczenie na obrazie przebija bryłę na wylot; TRELLIS.2 potrafi przenieść poświatę oka
+    // na potylicę (kot TeOgochi, 2026-10-08) — „przód” bierze tylko przednią część (+Z), „tył” tylną.
+    const [glebiaOka, setGlebiaOka] = useState<'cala' | 'przod' | 'tyl'>('przod');
     useEffect(() => {
         setKolor(KOLOR_ZERO); setWycinekFr(null); setSylwetka(null); setWycinekOka(null);
         if (wybrany?.stan === 'gotowe') sylwetkaBryly(wybrany.id).then(setSylwetka).catch(() => setSylwetka(null));
     }, [wybrany?.id, wybrany?.stan]);
     const pudelkoFr: Pudelko | null = wycinekFr && sylwetka ? wycinekNaPudelko(wycinekFr, sylwetka) : null;
-    const pudelkoOka: Pudelko | null = wycinekOka && sylwetka ? wycinekNaPudelko(wycinekOka, sylwetka) : null;
+    const GLEBIE = { cala: { z0: 0, z1: 1 }, przod: { z0: 0.55, z1: 1 }, tyl: { z0: 0, z1: 0.45 } } as const;
+    const pudelkoOka: Pudelko | null = wycinekOka && sylwetka ? { ...wycinekNaPudelko(wycinekOka, sylwetka), ...GLEBIE[glebiaOka] } : null;
     const podgladOka: PodgladSwiatla | null = pudelkoOka ? { pudelko: pudelkoOka, prog: progOka / 100, kolor: kolorOka || null } : null;
 
     const odswiez = useCallback(async () => {
@@ -313,6 +318,9 @@ export default function Assety3D() {
                             <p className="text-[10px] leading-snug text-slate-500">Zaznacz na obrazie samo oko (z małym marginesem). Świeci tylko to, co jaśniejsze niż próg — ciemne futro wokół zostaje. Na bryle zobaczysz, co zaświeci.</p>
                             <ZaznaczWycinek src={adresPliku(wybrany.id, 'obraz.png')} wycinek={wycinekOka} onZmiana={setWycinekOka} />
                             <label className="flex items-center gap-2 text-[11px] text-slate-400"><span className="w-20">Próg jasności</span><input type="range" min={0} max={95} step={1} value={progOka} onChange={(e) => setProgOka(Number(e.target.value))} className="min-w-0 flex-1 accent-amber-300" /><span className="w-9 text-right font-mono text-[10px]">{progOka}</span></label>
+                            <label className="flex items-center gap-2 text-[11px] text-slate-400"><span className="w-20">Głębokość</span>
+                                <select value={glebiaOka} onChange={(e) => setGlebiaOka(e.target.value as 'cala' | 'przod' | 'tyl')} className="flex-1 rounded-lg border border-slate-700 bg-black/40 px-2 py-0.5 text-[11px]"><option value="przod">przód bryły (twarz)</option><option value="tyl">tył bryły</option><option value="cala">na wylot</option></select>
+                            </label>
                             <label className="flex items-center gap-2 text-[11px] text-slate-400"><span className="w-20">Moc</span><input type="range" min={1} max={20} step={1} value={mocOka} onChange={(e) => setMocOka(Number(e.target.value))} className="min-w-0 flex-1 accent-amber-300" /><span className="w-9 text-right font-mono text-[10px]">{mocOka}</span></label>
                             <label className="flex items-center gap-2 text-[11px] text-slate-400"><span className="w-20">Barwa</span>
                                 <input type="checkbox" checked={!!kolorOka} onChange={(e) => setKolorOka(e.target.checked ? '#ffd23f' : '')} /> własna
