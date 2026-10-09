@@ -13,6 +13,8 @@ import { Clapperboard, FileUp, Loader2, ListChecks, Play, RefreshCw, Save, Send,
 import { gry as pobierzGry, silniki as pobierzModele, type ProjektGry, type Silnik } from '../lib/kodeks';
 import { naGielde, szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
 import { SEKCJE, dobierzKlockiGdd, krokiKodeksa, type KrokKodeksa, importujPlik, importujTekst, klockiGdd, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, ustawZadanieGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type StanKlockowZadania, type WpisRozmowy } from '../lib/gdd';
+import FilmyGry from './FilmyGry';
+
 
 const STAN_ZADANIA: Record<string, string> = { czeka: 'text-slate-500', trwa: 'text-cyan-300', gotowe: 'text-emerald-300', blad: 'text-rose-300', pominiete: 'text-slate-600 line-through', klocki: 'text-amber-300' };
 const ZNAK: Record<string, string> = { czeka: '○', trwa: '◐', gotowe: '●', blad: '✗', pominiete: '–', klocki: '🧱' };
@@ -104,6 +106,12 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
     }, [wybrany, produkcja?.stan, brudne]);
 
     const zmien = (zmiana: Partial<Gdd>) => { setGdd((g) => g ? { ...g, ...zmiana } : g); setBrudne(true); };
+    // 🎬 stan filmów z mostu (zlecony → gotowy) bez ruszania niezapisanych zmian w reszcie GDD
+    const odswiezFilmy = useCallback(async () => {
+        if (!wybrany) return;
+        const d = await wczytajGdd(wybrany).catch(() => null);
+        if (d?.gdd) setGdd((g) => (g ? { ...g, filmy: d.gdd!.filmy ?? [] } : g));
+    }, [wybrany]);
     const zmienSekcje = (s: Sekcja, tresc: string) => { setGdd((g) => g ? { ...g, sekcje: { ...g.sekcje, [s]: tresc } } : g); setBrudne(true); };
 
     const zapisz = async () => {
@@ -143,14 +151,14 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
             setRozmowa([...historia, { kiedy: new Date().toISOString(), kto: 'rezyser', tresc: r.odpowiedz }]);
             // ⚠️ Dawniej tylko sekcje/tytuł — propozycja z samymi KAMIENIAMI (plan) była po cichu wyrzucana (Suweren 2026-10-08:
             // „nie widzę tych zmian na panelu… realizuj plan wciąż 0”), a „Wpisz do GDD” kamieni i tak nie przenosiło.
-            if (r.propozycja && (r.propozycja.sekcje || r.propozycja.tytul || r.propozycja.kamienie?.length)) setPropozycja(r.propozycja);
+            if (r.propozycja && (r.propozycja.sekcje || r.propozycja.tytul || r.propozycja.kamienie?.length || r.propozycja.filmy?.length)) setPropozycja(r.propozycja);
         } catch (e) { setBlad((e as Error).message); } finally { setPraca(null); }
     };
     const wpiszPropozycje = async () => {
         if (!propozycja || !gdd || !wybrany) return;
         const sekcje = { ...gdd.sekcje };
         for (const [k, v] of Object.entries(propozycja.sekcje ?? {})) if (typeof v === 'string' && v.trim()) sekcje[k as Sekcja] = v;
-        const nowy: Gdd = { ...gdd, sekcje, ...(propozycja.tytul ? { tytul: propozycja.tytul } : {}), ...(propozycja.gatunek ? { gatunek: propozycja.gatunek } : {}), ...(propozycja.perspektywa ? { perspektywa: propozycja.perspektywa } : {}), ...(propozycja.kamienie?.length ? { kamienie: propozycja.kamienie } : {}) };
+        const nowy: Gdd = { ...gdd, sekcje, ...(propozycja.tytul ? { tytul: propozycja.tytul } : {}), ...(propozycja.gatunek ? { gatunek: propozycja.gatunek } : {}), ...(propozycja.perspektywa ? { perspektywa: propozycja.perspektywa } : {}), ...(propozycja.kamienie?.length ? { kamienie: propozycja.kamienie } : {}), ...(propozycja.filmy?.length ? { filmy: propozycja.filmy } : {}) };
         setPropozycja(null);
         // Zapis od razu: plan (kamienie) ma być w moście, zanim ktoś kliknie „Realizuj plan”.
         setGdd(nowy); setPraca('zapis');
@@ -163,6 +171,10 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
             const noweKamienie = pr.kamienie.filter((k) => !gdd.kamienie.some((s) => s.id === k.id)).length;
             const zadan = (ks: { zadania: unknown[] }[]) => ks.reduce((n, k) => n + k.zadania.length, 0);
             czesci.push(`plan: ${pr.kamienie.length} kamieni${noweKamienie ? ` (+${noweKamienie} nowe)` : ''}, zadań ${zadan(gdd.kamienie)} → ${zadan(pr.kamienie)}`);
+        }
+        if (pr.filmy?.length && gdd) {
+            const nowe = pr.filmy.filter((f) => !(gdd.filmy ?? []).some((s) => s.id === f.id)).length;
+            czesci.push(`🎬 filmy: ${pr.filmy.length}${nowe ? ` (+${nowe} nowe)` : ''}`);
         }
         return czesci.join(', ');
     };
@@ -297,6 +309,8 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                                     </details>
                                 ))}
                             </div>
+
+                            {wybrany && <FilmyGry projekt={wybrany} gdd={gdd} zmien={zmien} odswiez={odswiezFilmy} />}
 
                             {/* PLAN + PRODUKCJA */}
                             <div className="space-y-2 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
