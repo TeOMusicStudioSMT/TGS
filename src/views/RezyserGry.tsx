@@ -34,6 +34,9 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
     const [model, setModel] = useState('');
     // ↻ Zapasowe modele produkcji (pamiętane na urządzeniu): zadanie, na którym główny padł, próbuje następny.
     const [zapasowe, setZapasowe] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('tgs_zapasowe') || '[]'); } catch { return []; } });
+    // ☁️ Chmura po chmurze: gdy główny z chmury padnie, próbuje innej chmury przed lokalnymi (pamiętane na urządzeniu).
+    const [chmuraPoChmurze, setChmuraPoChmurze] = useState<boolean>(() => { try { return localStorage.getItem('tgs_chmura_po_chmurze') !== '0'; } catch { return true; } });
+    const przelaczChmurePoChmurze = (v: boolean) => { setChmuraPoChmurze(v); try { localStorage.setItem('tgs_chmura_po_chmurze', v ? '1' : '0'); } catch { /* bez pamięci */ } };
     const przelaczZapasowy = (m: string) => setZapasowe((z) => {
         const nowe = z.includes(m) ? z.filter((x) => x !== m) : [...z, m].slice(-3);
         try { localStorage.setItem('tgs_zapasowe', JSON.stringify(nowe)); } catch { /* bez pamięci */ }
@@ -127,7 +130,7 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
         if (!wybrany) return;
         if (brudne) await zapisz();
         setBlad(null);
-        try { await realizujGdd(wybrany, kamien, model || undefined, zapasowe.filter((m) => m !== model && modele.some((x) => x.model === m && x.dostepny))); setProdukcja(await produkcjaGdd(wybrany)); } catch (e) { setBlad((e as Error).message); }
+        try { await realizujGdd(wybrany, kamien, model || undefined, zapasowe.filter((m) => m !== model && modele.some((x) => x.model === m && x.dostepny)), chmuraPoChmurze); setProdukcja(await produkcjaGdd(wybrany)); } catch (e) { setBlad((e as Error).message); }
     };
     const przerwij = async () => { if (wybrany) { try { await przerwijGdd(wybrany); } catch (e) { setBlad((e as Error).message); } } };
     const powiedz = async () => {
@@ -243,6 +246,10 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                         {wybranyModel && <p className={`text-[10px] leading-snug ${/⚠/.test(wybranyModel.uwaga) ? 'text-amber-400' : 'text-slate-500'}`}>{wybranyModel.uwaga}</p>}
                         <p className="text-[10px] leading-snug text-slate-500">Domyślnie lokalnie. Chmura tylko gdy sam ją wybierzesz, a klucz jest udostępniony mostowi (Hub → TeO Kibel → „🔗 Udostępnij mostowi”).</p>
                         <p className="pt-1 font-mono text-[10px] uppercase tracking-wider text-slate-500">↻ Zapasowe (gdy zadanie padnie) — max 3</p>
+                        <label className="flex items-start gap-1.5 text-[11px] text-sky-200" title="Główny z chmury padnie → najpierw inny model chmury (Twój zaznaczony albo sam: najmocniejszy innego dostawcy, np. po Sonnecie Gemini, potem Opus), lokalne zapasowe dopiero na końcu.">
+                            <input type="checkbox" className="mt-0.5" checked={chmuraPoChmurze} onChange={(e) => przelaczChmurePoChmurze(e.target.checked)} />
+                            <span>☁️ chmura po chmurze — gdy model chmury padnie, najpierw inna chmura (zapłacisz za jej tokeny)</span>
+                        </label>
                         <div className="max-h-32 space-y-0.5 overflow-y-auto">
                             {modele.filter((m) => m.model !== model).map((m) => (
                                 <label key={m.id} className={`flex items-center gap-1.5 text-[11px] ${m.dostepny ? 'text-slate-300' : 'text-slate-600'}`} title={m.uwaga}>
