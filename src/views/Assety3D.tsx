@@ -147,7 +147,13 @@ export default function Assety3D() {
     const [promocje, setPromocje] = useState<ZwiadPromocji | null>(null);
     const [szukamPromocji, setSzukamPromocji] = useState(false);
     const [bladPromocji, setBladPromocji] = useState<string | null>(null);
-    useEffect(() => { stanChmury().then((s) => setChmuraKlucz(s.maKlucz)).catch(() => setChmuraKlucz(null)); }, []);
+    // Klucz bywa udostępniany mostowi w trakcie (Hub → Kibel) — sprawdzamy też po powrocie do okna, bez przeładowania strony.
+    useEffect(() => {
+        const sprawdz = () => { stanChmury().then((s) => setChmuraKlucz(s.maKlucz)).catch(() => setChmuraKlucz(null)); };
+        sprawdz();
+        addEventListener('focus', sprawdz);
+        return () => removeEventListener('focus', sprawdz);
+    }, []);
     useEffect(() => { zwiadyPromocji().then((z) => setPromocje(z.find((x) => /meshy/i.test(x.usluga)) ?? null)).catch(() => {}); }, []);
     useEffect(() => { setWycenaCh(null); }, [wybrany?.id, rodzajChmury, stylChmury, rozdzChmury, pbrChmury, scianyChmury, topologiaChmury]);
     const zlecenieChmury = (): ZlecenieChmury => rodzajChmury === 'retekstura' ? { rodzaj: 'retekstura', styl: stylChmury, rozdzielczosc: rozdzChmury, pbr: pbrChmury } : { rodzaj: 'remesh', sciany: scianyChmury, topologia: topologiaChmury };
@@ -383,6 +389,8 @@ export default function Assety3D() {
                                     <span>5 kredytów</span>
                                 </div>
                             )}
+                            {!wycenaCh && (chmuraKlucz === null ? <p className="text-[10px] text-amber-300/90">Most nie odpowiada o stan chmury — sprawdź, czy Katedra działa.</p>
+                                : rodzajChmury === 'retekstura' && stylChmury.trim().length < 3 && chmuraKlucz ? <p className="text-[10px] text-slate-400">✍️ Opisz styl tekstur (min. 3 znaki), wtedy „💰 Wyceń” się odblokuje.</p> : null)}
                             {wycenaCh && <p className={`text-[11px] ${wycenaCh.wystarczy && !wycenaCh.zaDuzy ? 'text-emerald-300' : 'text-amber-300'}`}>💰 {wycenaCh.kredyty} kredytów (≈ ${wycenaCh.usdOkolo}) · saldo Meshy {wycenaCh.saldo}{!wycenaCh.wystarczy ? ' — za mało' : ''} · plik {wycenaCh.mb} MB{wycenaCh.zaDuzy ? ' — za duży, najpierw uprość' : ''}</p>}
                             <div className="flex gap-2">
                                 <button onClick={() => void wycenChmury()} disabled={!chmuraKlucz || poprawiam || (rodzajChmury === 'retekstura' && stylChmury.trim().length < 3)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-sky-400 disabled:opacity-40">💰 Wyceń</button>
