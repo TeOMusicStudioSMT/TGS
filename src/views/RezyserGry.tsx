@@ -14,6 +14,7 @@ import { gry as pobierzGry, silniki as pobierzModele, type ProjektGry, type Siln
 import { naGielde, szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
 import { SEKCJE, dobierzKlockiGdd, krokiKodeksa, type KrokKodeksa, importujPlik, importujTekst, klockiGdd, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, ustawZadanieGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type StanKlockowZadania, type WpisRozmowy } from '../lib/gdd';
 import FilmyGry from './FilmyGry';
+import BohaterowieGry from './BohaterowieGry';
 
 
 const STAN_ZADANIA: Record<string, string> = { czeka: 'text-slate-500', trwa: 'text-cyan-300', gotowe: 'text-emerald-300', blad: 'text-rose-300', pominiete: 'text-slate-600 line-through', klocki: 'text-amber-300' };
@@ -311,6 +312,7 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                             </div>
 
                             {wybrany && <FilmyGry projekt={wybrany} gdd={gdd} zmien={zmien} odswiez={odswiezFilmy} />}
+                            {wybrany && <BohaterowieGry projekt={wybrany} onAssety={onPrzejdz ? () => onPrzejdz('assety', {}) : undefined} />}
 
                             {/* PLAN + PRODUKCJA */}
                             <div className="space-y-2 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">

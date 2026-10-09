@@ -63,3 +63,19 @@ export const zastosujPrzydzial = (przydzial: Przydzial[]) => post<{ wynik: Array
 export interface Zlecenie { id: string; rodzaj: 'zadanie' | 'projekt'; tytul: string; opis: string; modele: string[]; budzetGRV: number; stan: 'ogloszone' | 'wycofane'; od: string }
 export const naGielde = (p: { rodzaj: 'zadanie' | 'projekt'; projekt: string; tytul: string; opis?: string; modele?: string[]; budzetGRV?: number }) =>
     post<{ zlecenie: Zlecenie }>('/api/gielda-mocy/zlecenia', p).then((d) => d.zlecenie);
+
+// ── 🧝 Bohaterowie startowi (services/Bohaterowie.js): karta → obraz → bryła → [Meshy tekstury + rig] → do gry ──
+export type EtapBohatera = 'pomysl' | 'rysuje' | 'blad' | 'obraz' | 'rzezbi' | 'bryla' | 'tekstury' | 'rig' | 'w-grze';
+export interface Bohater {
+    id: string; imie: string; plec: 'kobieta' | 'mezczyzna' | 'inna'; zywiol: string; droga: string; opis: string;
+    obraz: string | null; wGrze: { plik: string; zrodlo: string; ruch: string | null } | null;
+    etap: EtapBohatera; najlepsza: { id: string; tekstury: boolean; ruchy: string[] } | null; wersji: number; blad: string | null; nowszaNizWGrze: boolean;
+}
+const pB = (projekt: string) => `/api/bohaterowie/${encodeURIComponent(projekt)}`;
+export const bohaterowie = (projekt: string) => api<{ bohaterowie: Bohater[] }>(pB(projekt)).then((d) => d.bohaterowie);
+export const zapiszBohatera = (projekt: string, b: Partial<Bohater>) => post<{ bohater: Bohater }>(pB(projekt), b).then((d) => d.bohater);
+export const usunBohatera = (projekt: string, id: string) => api(`${pB(projekt)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const narysujBohatera = (projekt: string, id: string) => post(`${pB(projekt)}/${encodeURIComponent(id)}/obraz`);
+export const wyrzezbBohatera = (projekt: string, id: string) => post(`${pB(projekt)}/${encodeURIComponent(id)}/bryla`);
+export const bohaterDoGry = (projekt: string, id: string) => post(`${pB(projekt)}/${encodeURIComponent(id)}/do-gry`);
+export const bohaterZGry = (projekt: string, id: string) => api(`${pB(projekt)}/${encodeURIComponent(id)}/do-gry`, { method: 'DELETE' });
