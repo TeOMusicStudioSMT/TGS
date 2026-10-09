@@ -10,9 +10,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as ImageIcon, Landmark, Package, Sparkles, Palette, ScanSearch, X, Eye, Cloud } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { zwolnijScene } from '../lib/zwolnijScene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, akcjeMeshy, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
@@ -69,7 +70,7 @@ function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { ur
         }, undefined, (e) => setInfo(`nie wczytałem GLB: ${(e as Error).message ?? e}`));
         const petla = () => { if (!zywy) return; ctrl.update(); if (model) model.rotation.y += 0.002; renderer.render(scena, kamera); requestAnimationFrame(petla); };
         petla();
-        return () => { zywy = false; siatki.current = []; ctrl.dispose(); renderer.dispose(); el.innerHTML = ''; };
+        return () => { zywy = false; siatki.current = []; ctrl.dispose(); zwolnijScene(scena, renderer); el.innerHTML = ''; };
     }, [url]);
     // 🎨 kolor na żywo (ta sama matematyka co most) + 🔍 fragment podświetlony na różowo
     useEffect(() => {
@@ -369,8 +370,8 @@ export default function Assety3D() {
 
                 <aside className="space-y-2">
                     <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Gamepad2 size={12} /> Podgląd GLB {wybrany ? `· ${wybrany.nazwa}` : ''}</p>
-                    <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono)) : null} kolor={kolor} fragment={pudelkoFr} swiatlo={podgladOka} />
-                    {wybrany?.poprawki?.length ? <p className="text-[10px] text-slate-500">Wersja z poprawkami: {wybrany.poprawki.map((p) => p.rodzaj === 'kolor' ? '🎨 kolor' : p.rodzaj === 'swiatlo' ? `✨ oko ${p.kolor ?? 'auto'}` : `🔍 fragment ${p.sciany.toLocaleString('pl-PL')}`).join(' → ')}{wybrany.ulepsza ? ` (z ${wybrany.ulepsza})` : ''}</p> : null}
+                    <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono) + (wybrany.rozmiarGlb ?? 0)) : null} kolor={kolor} fragment={pudelkoFr} swiatlo={podgladOka} />
+                    {wybrany?.poprawki?.length ? <p className="text-[10px] text-slate-500">Wersja z poprawkami: {wybrany.poprawki.map(opisPoprawki).join(' → ')}{wybrany.ulepsza ? ` (z ${wybrany.ulepsza})` : ''}</p> : null}
                     {wybrany?.tekstury && <p className="rounded-lg border border-sky-700/40 bg-sky-950/30 p-2 text-[11px] text-sky-200">☁️ Wersja z chmury ({wybrany.chmura?.usluga} · {wybrany.chmura?.rodzaj}) ma tekstury — kolor, fragment i oko działają na wersji sprzed chmury ({wybrany.ulepsza}).</p>}
                     {wybrany?.stan === 'gotowe' && !wybrany.tekstury && (
                         <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">

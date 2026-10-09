@@ -10,7 +10,17 @@ import type { Pudelko, Sylwetka, UstawieniaKoloru } from './kolorBryly';
 
 export interface Asset3D { id: string; nazwa: string; opis: string; zrodlo: 'tekst' | 'zdjecie' | 'obraz'; tekst: string | null; promptObrazu?: string; sciany: number; rozdzielczosc: number; utworzono: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; czasy: { obraz?: number; '3d'?: number; razem?: number }; rozmiarGlb?: number; wGrach: string[]; ulepsza?: string; poprawki?: Poprawka[]; siatka?: { trojkaty: number; fragment?: InfoFragmentu; swiatlo?: InfoSwiatla }; tekstury?: boolean; chmura?: { usluga: string; rodzaj: string; kredyty: number; kiedy: string }; }
 /** Poprawki bryły (most: services/Assety3D.js) — kolejne kolory się składają, fragment liczy się ostatni. */
-export type Poprawka = ({ rodzaj: 'kolor' } & UstawieniaKoloru & { kiedy: string }) | { rodzaj: 'fragment'; pudelko: Pudelko; sciany: number; kiedy: string } | { rodzaj: 'swiatlo'; pudelko: Pudelko; prog: number; kolor: string | null; moc: number; kiedy: string };
+export type Poprawka = ({ rodzaj: 'kolor' } & UstawieniaKoloru & { kiedy: string }) | { rodzaj: 'fragment'; pudelko: Pudelko; sciany: number; kiedy: string } | { rodzaj: 'swiatlo'; pudelko: Pudelko; prog: number; kolor: string | null; moc: number; kiedy: string }
+  /** ☁️ wersja z chmury (Meshy) — retekstura, remesh, obraz3d, rig */
+  | { rodzaj: 'chmura'; usluga: string; zlecenie: string; kredyty: number; kiedy: string };
+/** Poprawka po ludzku — każdy rodzaj (nieznany = sama nazwa, nigdy wyjątek: wywrotka tu czerniła całe studio). */
+export function opisPoprawki(p: Poprawka): string {
+  if (p.rodzaj === 'kolor') return '🎨 kolor';
+  if (p.rodzaj === 'swiatlo') return `✨ oko ${p.kolor ?? 'auto'}`;
+  if (p.rodzaj === 'fragment') return `🔍 fragment ${Number(p.sciany ?? 0).toLocaleString('pl-PL')}`;
+  if (p.rodzaj === 'chmura') return `☁️ ${p.usluga ?? 'chmura'}: ${({ retekstura: 'retekstura', remesh: 'remesh', obraz3d: 'Image-to-3D', rig: 'szkielet + ruchy' } as Record<string, string>)[p.zlecenie] ?? p.zlecenie ?? '?'}${p.kredyty ? ` (${p.kredyty} kr.)` : ''}`;
+  return String((p as { rodzaj?: string }).rodzaj ?? '?');
+}
 export interface InfoSwiatla { trojkaty: number; kolor: string; moc: number; srodek: [number, number, number]; promien: number; }
 export interface InfoFragmentu { wMasterze: number; trojkaty: number; reszta: number; granica: number; prosba: number | null; ograniczony: boolean; }
 export interface ZadanieAssetu { id: string; asset: string; stan: 'trwa' | 'gotowe' | 'blad'; etap: string; od: string; koniec: string | null; blad?: string | null; kroki?: Array<{ kiedy: string; etap: string; tekst: string }>; sekundyEtapu?: number; }

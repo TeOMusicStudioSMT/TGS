@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Film, Loader2, RefreshCw, Trash2, Gamepad2, Play } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { zwolnijScene } from '../lib/zwolnijScene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
 import { adresPliku, listaAssetow, type Asset3D } from '../lib/assety3d';
@@ -43,7 +44,7 @@ function PodgladRuchu({ url }: { url: string | null }) {
         }, undefined, (e) => setInfo(`nie wczytałem GLB: ${(e as Error).message ?? e}`));
         const petla = () => { if (!zywy) return; ctrl.update(); mixer?.update(zegar.getDelta()); renderer.render(scena, kamera); requestAnimationFrame(petla); };
         petla();
-        return () => { zywy = false; ctrl.dispose(); renderer.dispose(); el.innerHTML = ''; };
+        return () => { zywy = false; mixer?.stopAllAction(); ctrl.dispose(); zwolnijScene(scena, renderer); el.innerHTML = ''; };
     }, [url]);
     return <div className="relative h-80 w-full overflow-hidden rounded-xl border border-slate-800 bg-black/40"><div ref={ref} className="h-full w-full" />{!url && <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">Policz ruch albo wybierz gotowy.</p>}{info && <p className="absolute bottom-1 left-2 font-mono text-[10px] text-slate-400">{info}</p>}</div>;
 }
