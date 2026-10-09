@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
@@ -143,6 +143,8 @@ export default function Assety3D() {
     const [topologiaChmury, setTopologiaChmury] = useState<'triangle' | 'quad'>('triangle');
     const [wycenaCh, setWycenaCh] = useState<WycenaChmury | null>(null);
     const [zadanieCh, setZadanieCh] = useState<ZadanieChmury | null>(null);
+    const [patrzy, setPatrzy] = useState(false);
+    const [bladStylu, setBladStylu] = useState<string | null>(null);
     // 🏷️ Zwiadowca: kody rabatowe Meshy (ostatni zwiad z mostu; nowe szukanie = wyszukiwanie w sieci przez API Claude, grosze)
     const [promocje, setPromocje] = useState<ZwiadPromocji | null>(null);
     const [szukamPromocji, setSzukamPromocji] = useState(false);
@@ -236,6 +238,18 @@ export default function Assety3D() {
         if (!wybrany) return;
         setBlad(null); setPoprawiam(true);
         try { setWycenaCh(await wycenChmure(wybrany.id, zlecenieChmury())); } catch (e) { setBlad((e as Error).message); } finally { setPoprawiam(false); }
+    };
+    // Styl retekstury: puste pole wypełnia się opisem wybranej bryły (bez modelu); „👁️ ze zdjęcia” pyta oczy Katedry.
+    useEffect(() => {
+        if (wybrany && !stylChmury.trim()) setStylChmury(stylZOpisu(wybrany));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [wybrany?.id]);
+    const stylZObrazu = async () => {
+        if (!wybrany) return;
+        setPatrzy(true); setBladStylu(null);
+        try { const r = await stylZeZdjecia(wybrany.id); setStylChmury(r.styl); setWycenaCh(null); }
+        catch (e) { setBladStylu(e instanceof Error ? e.message : String(e)); }
+        finally { setPatrzy(false); }
     };
     const szukajKodowMeshy = async () => {
         setSzukamPromocji(true); setBladPromocji(null);
@@ -377,7 +391,14 @@ export default function Assety3D() {
                                 {(['retekstura', 'remesh'] as const).map((r) => <button key={r} onClick={() => setRodzajChmury(r)} className={`rounded-lg border px-2 py-1 ${rodzajChmury === r ? 'border-sky-400 text-sky-200' : 'border-slate-700 text-slate-400'}`}>{r === 'retekstura' ? '🎨 Retekstura' : '🔺 Remesh'}</button>)}
                             </div>
                             {rodzajChmury === 'retekstura' ? (<>
-                                <textarea value={stylChmury} onChange={(e) => setStylChmury(e.target.value)} rows={2} maxLength={800} placeholder="Styl tekstur, np. „czarna sierść mieniąca się jak opal, świecące bursztynowe środkowe oko”" className="w-full resize-none rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-[11px] outline-none" />
+                                <div className="flex gap-1.5">
+                                    <textarea value={stylChmury} onChange={(e) => setStylChmury(e.target.value)} rows={3} maxLength={800} placeholder="Styl tekstur, np. „czarna sierść mieniąca się jak opal, świecące bursztynowe środkowe oko”" className="min-w-0 flex-1 resize-none rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-[11px] outline-none" />
+                                    <div className="flex flex-col gap-1">
+                                        <button onClick={() => void stylZObrazu()} disabled={patrzy || !wybrany} title="Oczy Katedry (model widzący, lokalnie) opiszą materiały i barwy z obrazu bryły — po angielsku. Zajmuje kartę graficzną na chwilę." className="whitespace-nowrap rounded-lg border border-slate-700 px-2 py-1 text-[10px] hover:border-sky-400 disabled:opacity-40">{patrzy ? <Loader2 size={11} className="inline animate-spin" /> : '👁️'} ze zdjęcia</button>
+                                        <button onClick={() => { if (wybrany) { setStylChmury(stylZOpisu(wybrany)); setWycenaCh(null); } }} disabled={!wybrany} title="Wpisz opis bryły i jej poprawki (świecące oko) — bez modelu" className="whitespace-nowrap rounded-lg border border-slate-700 px-2 py-1 text-[10px] hover:border-sky-400 disabled:opacity-40">📝 z opisu</button>
+                                    </div>
+                                </div>
+                                {bladStylu && <p className="text-[10px] text-amber-300">⚠ {bladStylu}</p>}
                                 <div className="flex items-center gap-2 text-[11px] text-slate-400">
                                     <select value={rozdzChmury} onChange={(e) => setRozdzChmury(e.target.value as '2k' | '4k' | '8k')} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="2k">2K (10 kr.)</option><option value="4k">4K (10 kr.)</option><option value="8k">8K (15 kr.)</option></select>
                                     <label className="flex items-center gap-1"><input type="checkbox" checked={pbrChmury} onChange={(e) => setPbrChmury(e.target.checked)} /> PBR (metal, chropowatość, normalne)</label>

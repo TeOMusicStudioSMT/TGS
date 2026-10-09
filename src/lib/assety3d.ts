@@ -62,4 +62,12 @@ export interface ZnaleziskoPromocji { rodzaj: 'kod' | 'promocja' | 'program' | '
 export interface ZwiadPromocji { usluga: string; kiedy: string; znalezione: ZnaleziskoPromocji[]; odrzucone: (ZnaleziskoPromocji & { powod: string })[]; podsumowanie: string; koszt: { wyszukan: number; tokenyWe: number; tokenyWy: number; usdWyszukiwania: number }; uwaga: string }
 export const zwiadyPromocji = () => api<{ zwiady: ZwiadPromocji[] }>('/api/zwiadowca/promocje').then((d) => d.zwiady);
 export const szukajPromocji = (usluga: string) => api<{ zwiad: ZwiadPromocji }>('/api/zwiadowca/promocje', { method: 'POST', body: JSON.stringify({ usluga }) }).then((d) => d.zwiad);
+/** 👁️ Styl retekstury ze zdjęcia bryły (most pyta model widzący — zajmuje kartę na chwilę). */
+export const stylZeZdjecia = (id: string) => api<{ styl: string; model: string }>(`/api/assety3d/chmura/${encodeURIComponent(id)}/styl`, { method: 'POST', body: '{}' });
+/** Styl z opisu bryły i jej poprawek — od razu, bez modelu (gdy pole stylu puste). */
+export function stylZOpisu(a: Asset3D): string {
+  const opis = String(a.promptObrazu || a.opis || a.tekst || '').replace(/;?\s*jeden obiekt na spokojnym tle\s*$/i, '').trim();
+  const swiatlo = [...(a.poprawki ?? [])].reverse().find((p) => (p as { rodzaj?: string }).rodzaj === 'swiatlo') as { kolor?: string } | undefined;
+  return [opis, swiatlo?.kolor ? `świecące elementy w kolorze ${swiatlo.kolor}` : ''].filter(Boolean).join('; ').slice(0, 800);
+}
 export const zadanieChmury = (id: string) => api<{ zadanie: ZadanieChmury }>(`/api/assety3d/chmura/zadanie/${encodeURIComponent(id)}`).then((d) => d.zadanie);
