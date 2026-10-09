@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ImageIcon, Loader2, RefreshCw, Trash2, Wand2, Box, Mountain, Crop, X } from 'lucide-react';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresObrazu, brylaZObrazu, galezieProjektu, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
+import { adresObrazu, brylaZObrazu, brakujaceGalezie, galezieProjektu, nowePropozycje, uzupelnijGalezie, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
 
 /** Zaznaczanie wycinka myszą na obrazie — ułamki 0–1 względem obrazu. */
 export function ZaznaczWycinek({ src, wycinek, onZmiana }: { src: string; wycinek: Wycinek | null; onZmiana: (w: Wycinek | null) => void }) {
@@ -70,10 +70,25 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
         setGalaz(''); setWybrany(o); setDoWskazania(null);
         setInfo('🧱 Klocek dla Reżysera: ten obraz czeka na bryłę — „Do 3D” (karta postaci / zestaw: najpierw zaznacz jeden obiekt).');
     }, [doWskazania, lista]);
-    useEffect(() => {
-        if (!wybranaGra) { setGalezie([]); return; }
-        galezieProjektu(wybranaGra).then((g) => { setGalezie(g); setGalaz((obecna) => obecna || (krajobraz ? g.find((x) => x.id === 'krainy')?.id ?? '' : '')); }).catch(() => setGalezie([]));
+    const [brakujace, setBrakujace] = useState<Array<{ id: string; nazwa: string; opis: string }>>([]);
+    const [mysli, setMysli] = useState<string | null>(null);
+    const wczytajGalezie = useCallback(async () => {
+        if (!wybranaGra) { setGalezie([]); setBrakujace([]); return; }
+        try { const g = await galezieProjektu(wybranaGra); setGalezie(g); setGalaz((obecna) => obecna || (krajobraz ? g.find((x) => x.id === 'krainy')?.id ?? '' : '')); } catch { setGalezie([]); }
+        brakujaceGalezie(wybranaGra).then(setBrakujace).catch(() => setBrakujace([]));
     }, [wybranaGra, krajobraz]);
+    useEffect(() => { void wczytajGalezie(); }, [wczytajGalezie]);
+    // ✨ nowe propozycje do gałęzi (model Reżysera; bez powtórek z tym, co już jest i co narysowano)
+    const nowe = async () => {
+        if (!wybranaGra || !galaz) return;
+        setBlad(null); setMysli('propozycje');
+        try { await nowePropozycje(wybranaGra, galaz); await wczytajGalezie(); } catch (e) { setBlad((e as Error).message); } finally { setMysli(null); }
+    };
+    const dodajBrakujace = async (id: string) => {
+        if (!wybranaGra) return;
+        setBlad(null); setMysli('galezie');
+        try { await uzupelnijGalezie(wybranaGra); await wczytajGalezie(); setGalaz(id); } catch (e) { setBlad((e as Error).message); } finally { setMysli(null); }
+    };
     const trwa = zadania.some((z) => z.stan === 'trwa') || lista.some((o) => o.stan === 'trwa');
     useEffect(() => { if (!trwa) return; const t = setInterval(() => void odswiez(), 5000); return () => clearInterval(t); }, [trwa, odswiez]);
 
@@ -122,13 +137,20 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
                         {galezie.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                                 {galezie.filter((g) => !krajobraz || g.propozycje.some((p) => p.styl === 'krajobraz')).map((g) => (
-                                    <button key={g.id} onClick={() => setGalaz(galaz === g.id ? '' : g.id)} title={g.opis} className={`rounded-full border px-2 py-0.5 text-[11px] ${galaz === g.id ? 'border-tgs-primary/60 bg-tgs-primary/15 text-tgs-primary' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>{g.nazwa}</button>
+                                    <button key={g.id} onClick={() => setGalaz(galaz === g.id ? '' : g.id)} title={g.opis} className={`rounded-full border px-2 py-0.5 text-[11px] ${galaz === g.id ? 'border-tgs-primary/60 bg-tgs-primary/15 text-tgs-primary' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>{g.id === 'mini-teogochi' ? '🐾 ' : ''}{g.nazwa}</button>
+                                ))}
+                                {!krajobraz && brakujace.map((g) => (
+                                    <button key={g.id} onClick={() => void dodajBrakujace(g.id)} disabled={!!mysli} title={`Dopisz do GDD gałąź ze scenariusza: ${g.opis}`} className="rounded-full border border-dashed border-tgs-accent/60 px-2 py-0.5 text-[11px] text-tgs-accent hover:bg-tgs-accent/10 disabled:opacity-40">＋ {g.id === 'mini-teogochi' ? '🐾 ' : ''}{g.nazwa}</button>
                                 ))}
                             </div>
                         )}
-                        {propozycje.length > 0 && (
+                        {biezacaGalaz && (
                             <div className="space-y-1">
-                                <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Propozycje gałęzi</p>
+                                <div className="flex items-center justify-between">
+                                    <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Propozycje gałęzi</p>
+                                    <button onClick={() => void nowe()} disabled={!!mysli} title="Reżyser wymyśla nowe propozycje do tej gałęzi (bez powtórek z tym, co już jest i co narysowano)" className="flex items-center gap-1 rounded-md border border-tgs-primary/40 px-2 py-0.5 text-[10px] text-tgs-primary hover:bg-tgs-primary/10 disabled:opacity-40">{mysli === 'propozycje' ? <Loader2 size={10} className="animate-spin" /> : '✨'} nowe propozycje</button>
+                                </div>
+                                {!propozycje.length && <p className="text-[10px] text-slate-500">Brak propozycji — „✨ nowe propozycje”.</p>}
                                 {propozycje.map((p, i) => (
                                     <button key={i} onClick={() => { setOpis(p.opis); setStyl(p.styl); }} className="block w-full rounded-lg border border-slate-800 px-2 py-1 text-left text-[11px] text-slate-300 hover:border-tgs-primary/40">
                                         <span className="mr-1 font-mono text-[9px] text-tgs-accent">{style[p.styl]?.nazwa ?? p.styl}</span>{p.opis}

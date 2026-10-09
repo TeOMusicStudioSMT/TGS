@@ -26,6 +26,10 @@ export const zasiejSzablon = (id: string, nadpisz = false) => post<{ projekt: st
 // ── Gałęzie świata (z GDD projektu) ──
 export type StylObrazu = 'pojedynczy' | 'zestaw' | 'postac' | 'krajobraz';
 export interface Galaz { id: string; nazwa: string; opis: string; propozycje: Array<{ opis: string; styl: StylObrazu }>; }
+/** ✨ nowe propozycje gałęzi (model Reżysera) i 🐾 gałęzie scenariusza, których GDD jeszcze nie ma (np. Mini-TeOgochi). */
+export const nowePropozycje = (projekt: string, galaz: string) => post<{ propozycje: Galaz['propozycje'] }>(`/api/gdd/${encodeURIComponent(projekt)}/galezie/${encodeURIComponent(galaz)}/propozycje`).then((d) => d.propozycje);
+export const brakujaceGalezie = (projekt: string) => api<{ galezie: Array<{ id: string; nazwa: string; opis: string }> }>(`/api/gdd/${encodeURIComponent(projekt)}/galezie/brakujace`).then((d) => d.galezie);
+export const uzupelnijGalezie = (projekt: string) => post<{ dodane: string[] }>(`/api/gdd/${encodeURIComponent(projekt)}/galezie/uzupelnij`).then((d) => d.dodane);
 export const galezieProjektu = (projekt: string) => api<{ gdd: { galezie?: Galaz[] } | null }>(`/api/gdd/${encodeURIComponent(projekt)}`).then((d) => d.gdd?.galezie ?? []);
 
 // ── Pracownia obrazów ──

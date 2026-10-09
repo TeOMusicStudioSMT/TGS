@@ -64,6 +64,30 @@ export function przekoloruj(kolory: ArrayLike<number>, k: UstawieniaKoloru, pz =
     return out;
 }
 
+/**
+ * Piksele RGBA (sRGB, bajty) w miejscu — tekstury brył z Meshy. Jak `przekolorujPiksele` w moście (services/Siatka3D.js):
+ * bajt → liniowo → `przekoloruj` → sRGB; auto-poziomy z próbki całej tekstury; alfa nietknięta.
+ */
+export function przekolorujPiksele(rgba: Uint8ClampedArray | Uint8Array, k: UstawieniaKoloru): void {
+    const LIN = new Float32Array(256);
+    for (let i = 0; i < 256; i++) LIN[i] = doLin(i / 255);
+    const n = rgba.length / 4;
+    let pz: ReturnType<typeof poziomy> | null = null;
+    if (k.auto) {
+        const krok = Math.max(1, Math.floor(n / 20000)), probka: number[] = [];
+        for (let v = 0; v < n; v += krok) probka.push(LIN[rgba[v * 4]], LIN[rgba[v * 4 + 1]], LIN[rgba[v * 4 + 2]]);
+        pz = poziomy(probka);
+    }
+    const PACZKA = 1 << 18;
+    const buf = new Float32Array(PACZKA * 3);
+    for (let start = 0; start < n; start += PACZKA) {
+        const ile = Math.min(PACZKA, n - start);
+        for (let j = 0; j < ile; j++) { const o = (start + j) * 4; buf[j * 3] = LIN[rgba[o]]; buf[j * 3 + 1] = LIN[rgba[o + 1]]; buf[j * 3 + 2] = LIN[rgba[o + 2]]; }
+        const w = przekoloruj(ile === PACZKA ? buf : buf.subarray(0, ile * 3), k, pz);
+        for (let j = 0; j < ile; j++) { const o = (start + j) * 4; for (let c = 0; c < 3; c++) rgba[o + c] = Math.round(obetnij(doSrgb(w[j * 3 + c])) * 255); }
+    }
+}
+
 export interface Pudelko { x0: number; x1: number; y0: number; y1: number; z0?: number; z1?: number; }
 export interface Sylwetka { x0: number; y0: number; x1: number; y1: number; pewna: boolean; }
 

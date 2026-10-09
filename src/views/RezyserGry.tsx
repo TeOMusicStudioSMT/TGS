@@ -26,6 +26,8 @@ const doZrobienia = (stan: string) => stan === 'czeka' || stan === 'blad' || sta
 /** Przejście do Pracowni obrazów z gotowym opisem albo wskazanym obrazem (App czyta localStorage). */
 export type Przejscie = (widok: 'obrazy' | 'assety', dane: { opis?: string; obraz?: string }) => void;
 
+const WIDOCZNE_WIADOMOSCI = 3;
+
 export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybranaGra?: string; onGra?: (id: string) => void; onPrzejdz?: Przejscie } = {}) {
     const [lista, setLista] = useState<ProjektGry[] | null>(null);
     const [mostOffline, setMostOffline] = useState(false);
@@ -107,6 +109,7 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
         return () => clearInterval(t);
     }, [wybrany, produkcja?.stan, brudne]);
 
+    const [calaRozmowa, setCalaRozmowa] = useState(false);
     const zmien = (zmiana: Partial<Gdd>) => { setGdd((g) => g ? { ...g, ...zmiana } : g); setBrudne(true); };
     // 🎬 stan filmów z mostu (zlecony → gotowy) bez ruszania niezapisanych zmian w reszcie GDD
     const odswiezFilmy = useCallback(async () => {
@@ -379,12 +382,20 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                     <div ref={rozmowaRef} className="flex-1 space-y-2 overflow-y-auto p-3 text-[12px]">
                         {!gdd ? <p className="text-slate-500">Wybierz grę, żeby porozmawiać o jej GDD.</p>
                             : rozmowa.length === 0 ? <p className="text-slate-500">Reżyser zna GDD tej gry. Zapytaj o mechanikę, poproś o przepisanie sekcji albo o ocenę planu — gdy zaproponuje zmianę, pojawi się przycisk „Wpisz do GDD".</p>
-                                : rozmowa.map((w, i) => (
-                                    <div key={i} className={`rounded-lg px-3 py-2 ${w.kto === 'suweren' ? 'ml-6 bg-slate-800 text-slate-100' : 'mr-6 bg-black/40 text-slate-300'}`}>
-                                        <p className="mb-0.5 font-mono text-[9px] uppercase tracking-wider text-slate-500">{w.kto === 'suweren' ? 'Suweren' : 'Reżyser'}</p>
-                                        <p className="whitespace-pre-wrap leading-relaxed">{w.tresc}</p>
-                                    </div>
-                                ))}
+                                : <>
+                                    {/* długa rozmowa: widać ostatnie 3 wiadomości, starsze zwinięte (Suweren 2026-10-09) */}
+                                    {rozmowa.length > WIDOCZNE_WIADOMOSCI && (
+                                        <button onClick={() => setCalaRozmowa((c) => !c)} className="w-full rounded-md border border-slate-800 py-1 text-[10px] text-slate-500 hover:border-slate-600 hover:text-slate-300">
+                                            {calaRozmowa ? '▲ zwiń starsze' : `▼ starsze wiadomości (${rozmowa.length - WIDOCZNE_WIADOMOSCI})`}
+                                        </button>
+                                    )}
+                                    {(calaRozmowa ? rozmowa : rozmowa.slice(-WIDOCZNE_WIADOMOSCI)).map((w, i) => (
+                                        <div key={`${w.kiedy}-${i}`} className={`rounded-lg px-3 py-2 ${w.kto === 'suweren' ? 'ml-6 bg-slate-800 text-slate-100' : 'mr-6 bg-black/40 text-slate-300'}`}>
+                                            <p className="mb-0.5 font-mono text-[9px] uppercase tracking-wider text-slate-500">{w.kto === 'suweren' ? 'Suweren' : 'Reżyser'}</p>
+                                            <p className="whitespace-pre-wrap leading-relaxed">{w.tresc}</p>
+                                        </div>
+                                    ))}
+                                </>}
                         {praca === 'rozmowa' && <p className="flex items-center gap-2 text-slate-500"><Loader2 size={12} className="animate-spin" /> Reżyser myśli{model && /^(claude|gemini):/.test(model) ? ' (chmura)' : ' (lokalny model — bywa minuta)'}…</p>}
                         {propozycja && (
                             <div className="rounded-lg border border-tgs-primary/40 bg-tgs-primary/10 p-2">

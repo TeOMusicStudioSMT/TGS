@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { zwolnijScene } from '../lib/zwolnijScene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
-import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, zestawAkcji, ZESTAWY_AKCJI, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, przekolorujPiksele, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
 
@@ -31,6 +31,8 @@ function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { ur
     const ref = useRef<HTMLDivElement>(null);
     const [info, setInfo] = useState<string>('');
     const siatki = useRef<KoloryPodgladu[]>([]);
+    // 🎨 tekstury barwy (bryły z Meshy): oryginał pikseli + płótno, na którym suwaki liczą podgląd
+    const tekstury = useRef<{ mapa: THREE.Texture; maty: THREE.MeshStandardMaterial[]; orig: ImageData; plotno: HTMLCanvasElement; tex: THREE.CanvasTexture }[]>([]);
     const [wczytano, setWczytano] = useState(0);
     useEffect(() => {
         const el = ref.current; if (!el || !url) return;
@@ -49,12 +51,26 @@ function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { ur
             model = g.scene;
             const box = new THREE.Box3().setFromObject(model); const size = box.getSize(new THREE.Vector3()); const s = 1 / Math.max(size.x, size.y, size.z, 1e-6);
             model.scale.setScalar(s); const box2 = new THREE.Box3().setFromObject(model); const c = box2.getCenter(new THREE.Vector3()); model.position.sub(c); model.position.y += (box2.max.y - box2.min.y) / 2;
-            let tri = 0; siatki.current = [];
+            let tri = 0; siatki.current = []; tekstury.current = [];
+            
             model.traverse((o) => {
                 const m = o as THREE.Mesh;
                 if (!m.isMesh || !m.geometry) return;
                 tri += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
                 if (!(m.material as THREE.Material)?.type) m.material = new THREE.MeshStandardMaterial({ vertexColors: true });
+                for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) {
+                    const mapa = mat.map;
+                    const img = mapa?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+                    if (!mapa || !img?.width) continue;
+                    const znana = tekstury.current.find((x) => x.mapa === mapa);
+                    if (znana) { znana.maty.push(mat); continue; }
+                    const plotno = document.createElement('canvas'); plotno.width = img.width; plotno.height = img.height;
+                    const ctx = plotno.getContext('2d', { willReadFrequently: true }); if (!ctx) continue;
+                    ctx.drawImage(img, 0, 0);
+                    const tex = new THREE.CanvasTexture(plotno);
+                    tex.flipY = mapa.flipY; tex.colorSpace = mapa.colorSpace; tex.wrapS = mapa.wrapS; tex.wrapT = mapa.wrapT; tex.channel = mapa.channel;
+                    tekstury.current.push({ mapa, maty: [mat], orig: ctx.getImageData(0, 0, img.width, img.height), plotno, tex });
+                }
                 const c = m.geometry.getAttribute('color') as Atrybut | undefined;
                 if (c && c.itemSize >= 3) {
                     const orig = new Float32Array(c.count * 3);
@@ -70,8 +86,22 @@ function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { ur
         }, undefined, (e) => setInfo(`nie wczytałem GLB: ${(e as Error).message ?? e}`));
         const petla = () => { if (!zywy) return; ctrl.update(); if (model) model.rotation.y += 0.002; renderer.render(scena, kamera); requestAnimationFrame(petla); };
         petla();
-        return () => { zywy = false; siatki.current = []; ctrl.dispose(); zwolnijScene(scena, renderer); el.innerHTML = ''; };
+        return () => { zywy = false; siatki.current = []; for (const t of tekstury.current) t.tex.dispose(); tekstury.current = []; ctrl.dispose(); zwolnijScene(scena, renderer); el.innerHTML = ''; };
     }, [url]);
+    // 🎨 kolor tekstur na żywo (bryły z Meshy) — po chwili spokoju suwaka, bo tekstura 2K to 4 mln pikseli
+    useEffect(() => {
+        if (!tekstury.current.length) return;
+        const t = setTimeout(() => {
+            for (const x of tekstury.current) {
+                const ctx = x.plotno.getContext('2d'); if (!ctx) continue;
+                if (!kolor || bezZmian(kolor)) { ctx.putImageData(x.orig, 0, 0); }
+                else { const d = new ImageData(new Uint8ClampedArray(x.orig.data), x.orig.width, x.orig.height); przekolorujPiksele(d.data, kolor); ctx.putImageData(d, 0, 0); }
+                x.tex.needsUpdate = true;
+                if (x.maty[0].map !== x.tex) { for (const m of x.maty) { m.map = x.tex; m.needsUpdate = true; } x.mapa.dispose(); }   // tekstura z GLB zwolniona z karty — płótno ją zastępuje
+            }
+        }, 180);
+        return () => clearTimeout(t);
+    }, [kolor, wczytano]);
     // 🎨 kolor na żywo (ta sama matematyka co most) + 🔍 fragment podświetlony na różowo
     useEffect(() => {
         for (const s of siatki.current) {
@@ -138,7 +168,7 @@ export default function Assety3D() {
     const [glebiaOka, setGlebiaOka] = useState<'cala' | 'przod' | 'tyl'>('przod');
     // ☁️ chmura (Meshy): rodzaj, ustawienia, wycena (koszt i saldo PRZED wysłaniem), zadanie w tle
     const [chmuraKlucz, setChmuraKlucz] = useState<boolean | null>(null);
-    const [rodzajChmury, setRodzajChmury] = useState<'retekstura' | 'remesh' | 'obraz3d' | 'rig'>('retekstura');
+    const [rodzajChmury, setRodzajChmury] = useState<'retekstura' | 'remesh' | 'obraz3d' | 'rig' | 'akcje'>('retekstura');
     // 🧊 Image-to-3D (Meshy 7.1 / 6 lite) i 🦴 rig postaci (chód + bieg gratis, akcje z biblioteki po 3 kr.)
     const [modelI3d, setModelI3d] = useState<'latest' | 'meshy-6-lite'>('latest');
     const [pozaI3d, setPozaI3d] = useState<'' | 'a-pose' | 't-pose'>('');
@@ -148,6 +178,18 @@ export default function Assety3D() {
     const [kategoriaAkcji, setKategoriaAkcji] = useState('');
     const [szukajAkcji, setSzukajAkcji] = useState('');
     const [bladBiblioteki, setBladBiblioteki] = useState<string | null>(null);
+    const [dobieram, setDobieram] = useState<string | null>(null);
+    // 🎛️ auto: zestaw akcji z biblioteki (≤ 10) — zaznacza je i pokazuje na liście; Suweren może jeszcze zmienić
+    const auto = async (zestaw: string) => {
+        if (!wybrany) return;
+        setDobieram(zestaw); setBladBiblioteki(null);
+        try {
+            const a = await zestawAkcji(wybrany.id, zestaw);
+            if (!a.length) setBladBiblioteki('Ten zestaw nie ma już nowych akcji dla tej bryły.');
+            setAkcje(a.map((x) => x.id)); setKategoriaAkcji(''); setSzukajAkcji(''); setWycenaCh(null);
+            setBiblioteka((b) => [...a, ...(b ?? []).filter((x) => !a.some((y) => y.id === x.id))]);
+        } catch (e) { setBladBiblioteki((e as Error).message); } finally { setDobieram(null); }
+    };
     const [stylChmury, setStylChmury] = useState('');
     const [rozdzChmury, setRozdzChmury] = useState<'2k' | '4k' | '8k'>('2k');
     const [pbrChmury, setPbrChmury] = useState(false);
@@ -173,13 +215,15 @@ export default function Assety3D() {
     const zlecenieChmury = (): ZlecenieChmury => rodzajChmury === 'retekstura' ? { rodzaj: 'retekstura', styl: stylChmury, rozdzielczosc: rozdzChmury, pbr: pbrChmury }
         : rodzajChmury === 'obraz3d' ? { rodzaj: 'obraz3d', model: modelI3d, rozdzielczosc: modelI3d === 'meshy-6-lite' ? '2k' : rozdzChmury, pbr: pbrChmury, poza: pozaI3d }
             : rodzajChmury === 'rig' ? { rodzaj: 'rig', wzrost, akcje }
+                : rodzajChmury === 'akcje' ? { rodzaj: 'akcje', akcje }
                 : { rodzaj: 'remesh', sciany: scianyChmury, topologia: topologiaChmury };
     const opisZleceniaChmury = (): string => rodzajChmury === 'retekstura' ? `Retekstura ${rozdzChmury}${pbrChmury ? ' + PBR' : ''}`
         : rodzajChmury === 'obraz3d' ? `Image-to-3D (${modelI3d === 'latest' ? 'Meshy 7.1' : 'Meshy 6 lite'}, tekstury ${modelI3d === 'meshy-6-lite' ? '2k' : rozdzChmury}${pozaI3d ? `, ${pozaI3d}` : ''}) z obrazu bryły`
             : rodzajChmury === 'rig' ? `Rig postaci ${wzrost} m + chód i bieg${akcje.length ? ` + ${akcje.length} akcji z biblioteki` : ''}`
+                : rodzajChmury === 'akcje' ? `${akcje.length} akcji z biblioteki na gotowym rigu (kolejna paczka ruchów)`
                 : `Remesh ${scianyChmury.toLocaleString('pl-PL')} ścian (${topologiaChmury === 'quad' ? 'czworokąty' : 'trójkąty'})`;
     useEffect(() => {
-        if (rodzajChmury !== 'rig' || !chmuraKlucz) return;
+        if ((rodzajChmury !== 'rig' && rodzajChmury !== 'akcje') || !chmuraKlucz) return;
         const t = setTimeout(() => { akcjeMeshy(kategoriaAkcji, szukajAkcji).then((a) => { setBiblioteka(a); setBladBiblioteki(null); }).catch((e) => setBladBiblioteki((e as Error).message)); }, 300);
         return () => clearTimeout(t);
     }, [rodzajChmury, chmuraKlucz, kategoriaAkcji, szukajAkcji]);
@@ -372,10 +416,10 @@ export default function Assety3D() {
                     <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Gamepad2 size={12} /> Podgląd GLB {wybrany ? `· ${wybrany.nazwa}` : ''}</p>
                     <PodgladGlb url={wybrany && wybrany.stan === 'gotowe' ? adresPliku(wybrany.id, 'model.glb', Date.parse(wybrany.utworzono) + (wybrany.rozmiarGlb ?? 0)) : null} kolor={kolor} fragment={pudelkoFr} swiatlo={podgladOka} />
                     {wybrany?.poprawki?.length ? <p className="text-[10px] text-slate-500">Wersja z poprawkami: {wybrany.poprawki.map(opisPoprawki).join(' → ')}{wybrany.ulepsza ? ` (z ${wybrany.ulepsza})` : ''}</p> : null}
-                    {wybrany?.tekstury && <p className="rounded-lg border border-sky-700/40 bg-sky-950/30 p-2 text-[11px] text-sky-200">☁️ Wersja z chmury ({wybrany.chmura?.usluga} · {wybrany.chmura?.rodzaj}) ma tekstury — kolor, fragment i oko działają na wersji sprzed chmury ({wybrany.ulepsza}).</p>}
-                    {wybrany?.stan === 'gotowe' && !wybrany.tekstury && (
+                    {wybrany?.tekstury && <p className="rounded-lg border border-sky-700/40 bg-sky-950/30 p-2 text-[11px] text-sky-200">☁️ Wersja z chmury ({wybrany.chmura?.usluga} · {wybrany.chmura?.rodzaj}) ma tekstury — 🎨 kolor zmienisz suwakami niżej (liczy się na teksturach, też w ruchach riga); fragment i oko działają na wersji sprzed chmury ({wybrany.ulepsza}).</p>}
+                    {wybrany?.stan === 'gotowe' && (
                         <div className="space-y-1.5 rounded-xl border border-slate-800 bg-tgs-panel/60 p-3">
-                            <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Palette size={12} /> Kolor bryły · podgląd na żywo</p>
+                            <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Palette size={12} /> Kolor bryły · podgląd na żywo{wybrany.tekstury ? ' · tekstury' : ''}</p>
                             {([['czern', 'Podnieś czerń', 100, 0], ['jasnosc', 'Jasność', 100, -100], ['kontrast', 'Kontrast', 100, -100], ['nasycenie', 'Nasycenie', 100, -100], ['odcien', 'Odcień', 180, -180]] as const).map(([k, etykieta, zakres, od]) => (
                                 <label key={k} className="flex items-center gap-2 text-[11px] text-slate-400">
                                     <span className="w-20">{etykieta}</span>
@@ -412,7 +456,7 @@ export default function Assety3D() {
                             <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Cloud size={12} /> Dopracuj w chmurze · Meshy</p>
                             {chmuraKlucz === false && <p className="text-[11px] text-amber-300/90">Brak klucza Meshy w moście — Hub → TeO Kibel → wklej klucz <code>msy_…</code> → „🔗 Udostępnij mostowi”. API Meshy wymaga płatnego planu (Pro: 1000 kredytów / $20).</p>}
                             <div className="flex gap-2 text-[11px]">
-                                {(['retekstura', 'remesh', 'obraz3d', 'rig'] as const).map((r) => <button key={r} onClick={() => { setRodzajChmury(r); setWycenaCh(null); }} title={{ retekstura: 'nowe tekstury z opisu stylu', remesh: 'nowa topologia (ściany)', obraz3d: 'nowa bryła z obrazu tej bryły — Meshy zamiast TRELLIS (tekstury, lepsza geometria)', rig: 'szkielet postaci humanoidalnej + chód, bieg i akcje z biblioteki → zakładka 6 Ruch' }[r]} className={`rounded-lg border px-2 py-1 ${rodzajChmury === r ? 'border-sky-400 text-sky-200' : 'border-slate-700 text-slate-400'}`}>{{ retekstura: '🎨 Retekstura', remesh: '🔺 Remesh', obraz3d: '🧊 Image-to-3D', rig: '🦴 Rig + ruchy' }[r]}</button>)}
+                                {(['retekstura', 'remesh', 'obraz3d', 'rig', 'akcje'] as const).map((r) => <button key={r} onClick={() => { setRodzajChmury(r); setWycenaCh(null); }} title={{ retekstura: 'nowe tekstury z opisu stylu', remesh: 'nowa topologia (ściany)', obraz3d: 'nowa bryła z obrazu tej bryły — Meshy zamiast TRELLIS (tekstury, lepsza geometria)', rig: 'szkielet postaci humanoidalnej + chód, bieg i akcje z biblioteki → zakładka 6 Ruch', akcje: 'kolejna paczka akcji (≤ 10, 3 kr./akcja) na bryle, która JUŻ ma rig — bez ponownego rigowania' }[r]} className={`rounded-lg border px-2 py-1 ${rodzajChmury === r ? 'border-sky-400 text-sky-200' : 'border-slate-700 text-slate-400'}`}>{{ retekstura: '🎨 Retekstura', remesh: '🔺 Remesh', obraz3d: '🧊 Image-to-3D', rig: '🦴 Rig + ruchy', akcje: '🎞️ Akcje na rigu' }[r]}</button>)}
                             </div>
                             {rodzajChmury === 'obraz3d' ? (
                                 <div className="space-y-1 text-[11px] text-slate-400">
@@ -424,12 +468,20 @@ export default function Assety3D() {
                                         <label className="flex items-center gap-1"><input type="checkbox" checked={pbrChmury} onChange={(e) => setPbrChmury(e.target.checked)} /> PBR</label>
                                     </div>
                                 </div>
-                            ) : rodzajChmury === 'rig' ? (
+                            ) : rodzajChmury === 'rig' || rodzajChmury === 'akcje' ? (
                                 <div className="space-y-1.5 text-[11px] text-slate-400">
-                                    {!wybrany.tekstury
+                                    {rodzajChmury === 'akcje' ? (wybrany.chmura?.rodzaj !== 'rig'
+                                        ? <p className="text-[11px] text-amber-300/90">🎞️ Akcje dokłada się do wersji, która JUŻ ma rig z Meshy — wybierz bryłę po „🦴 Rig + ruchy”.</p>
+                                        : <p className="text-[10px] leading-snug text-slate-500">Kolejna paczka ruchów na tym samym szkielecie (bez ponownego rigowania): ≤ 10 akcji po 3 kr. → nowy plik ruchu „akcje2”, „akcje3”… w zakładce „6 Ruch”. Tak zbierzesz więcej niż 10.</p>)
+                                    : !wybrany.tekstury
                                         ? <p className="text-[11px] text-amber-300/90">🦴 Rig potrzebuje bryły z TEKSTURAMI (wersja z chmury). Najpierw „🎨 Retekstura” albo „🧊 Image-to-3D” tej bryły, potem wybierz nową wersję i wróć tutaj.</p>
                                         : <p className="text-[10px] leading-snug text-slate-500">Postać humanoidalna (dwie nogi, ręce), twarzą w stronę +Z. Rig = 5 kr. i daje gratis CHÓD i BIEG; akcje z biblioteki po 3 kr. (≤ 10, jeden plik). Ruchy lądują w zakładce „6 Ruch” jak ruchy z Blendera — „Do gry” z animacją.</p>}
-                                    <label className="flex items-center gap-2"><span className="w-16">Wzrost</span><input type="range" min={0.3} max={3} step={0.05} value={wzrost} onChange={(e) => { setWzrost(Number(e.target.value)); setWycenaCh(null); }} className="min-w-0 flex-1 accent-sky-400" /><span className="w-12 text-right font-mono text-[10px]">{wzrost.toFixed(2)} m</span></label>
+                                    {rodzajChmury === 'rig' && <label className="flex items-center gap-2"><span className="w-16">Wzrost</span><input type="range" min={0.3} max={3} step={0.05} value={wzrost} onChange={(e) => { setWzrost(Number(e.target.value)); setWycenaCh(null); }} className="min-w-0 flex-1 accent-sky-400" /><span className="w-12 text-right font-mono text-[10px]">{wzrost.toFixed(2)} m</span></label>}
+                                    <div className="flex flex-wrap items-center gap-1">
+                                        <span className="text-[10px] text-slate-500">🎛️ auto:</span>
+                                        {Object.entries(ZESTAWY_AKCJI).map(([k, n]) => <button key={k} onClick={() => void auto(k)} disabled={!!dobieram || !chmuraKlucz} title="Dobierz do 10 akcji z biblioteki (bez tych, które bryła już ma) — możesz potem zmienić" className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] hover:border-sky-400 disabled:opacity-40">{dobieram === k ? '…' : n}</button>)}
+                                        {akcje.length > 0 && <button onClick={() => { setAkcje([]); setWycenaCh(null); }} className="text-[10px] text-slate-500 hover:text-slate-300">✕ wyczyść</button>}
+                                    </div>
                                     <div className="flex gap-1.5">
                                         <select value={kategoriaAkcji} onChange={(e) => setKategoriaAkcji(e.target.value)} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="">wszystkie akcje</option><option value="WalkAndRun">chód i bieg</option><option value="BodyMovements">ruchy ciała</option><option value="DailyActions">codzienne</option><option value="Fighting">walka</option><option value="Dancing">taniec</option></select>
                                         <input value={szukajAkcji} onChange={(e) => setSzukajAkcji(e.target.value)} placeholder="szukaj (np. idle, attack, wave)" className="min-w-0 flex-1 rounded border border-slate-700 bg-black/40 px-2 py-0.5 outline-none" />
@@ -444,7 +496,7 @@ export default function Assety3D() {
                                         ))}
                                         {biblioteka && biblioteka.length === 0 && <p className="text-[10px] text-slate-500">Nic nie pasuje.</p>}
                                     </div>
-                                    <p className="text-[10px] text-slate-500">Wybrane akcje: {akcje.length}/10 · koszt {5 + 3 * akcje.length} kr.</p>
+                                    <p className="text-[10px] text-slate-500">Wybrane akcje: {akcje.length}/10 · koszt {(rodzajChmury === 'rig' ? 5 : 0) + 3 * akcje.length} kr.{rodzajChmury === 'rig' ? ' Więcej niż 10 — po rigu „🎞️ Akcje na rigu”.' : ''}</p>
                                 </div>
                             ) : rodzajChmury === 'retekstura' ? (<>
                                 <div className="flex gap-1.5">
