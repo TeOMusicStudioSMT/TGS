@@ -79,3 +79,17 @@ export const narysujBohatera = (projekt: string, id: string) => post(`${pB(proje
 export const wyrzezbBohatera = (projekt: string, id: string) => post(`${pB(projekt)}/${encodeURIComponent(id)}/bryla`);
 export const bohaterDoGry = (projekt: string, id: string) => post(`${pB(projekt)}/${encodeURIComponent(id)}/do-gry`);
 export const bohaterZGry = (projekt: string, id: string) => api(`${pB(projekt)}/${encodeURIComponent(id)}/do-gry`, { method: 'DELETE' });
+
+// ── 🏛️ Postać Katedry (services/PostacKatedry.js): JEDNA postać tej Katedry — avatar w MRPG Teterhii ──
+export interface KartaPostaci { imie: string; plec: Bohater['plec']; zywiol: string; droga: string; opis: string; obraz: string | null; korzen: string | null; opublikowana: { zrodlo: string; ruch: string | null; bajtow: number; kiedy: string } | null }
+export interface StanPostaci {
+    karta: KartaPostaci | null; imie?: string | null; etap: EtapBohatera | 'brak' | 'opublikowana';
+    najlepsza?: Bohater['najlepsza']; wersji?: number; blad?: string | null; nowszaNizWGrze?: boolean; opublikowana: KartaPostaci['opublikowana'];
+}
+export const postacKatedry = () => api<StanPostaci & { success: boolean }>('/api/postac-katedry');
+export const zapiszPostac = (k: Partial<KartaPostaci>) => post<{ karta: KartaPostaci }>('/api/postac-katedry', k).then((d) => d.karta);
+export const postacZOpisu = () => post('/api/postac-katedry/obraz');
+export const postacBryla = () => post('/api/postac-katedry/bryla');
+export const postacZeZdjecia = (dataURL: string) => post('/api/postac-katedry/zdjecie', { dataURL });
+export const opublikujPostac = () => post('/api/postac-katedry/opublikuj');
+export const wycofajPostac = () => api('/api/postac-katedry/opublikuj', { method: 'DELETE' });
