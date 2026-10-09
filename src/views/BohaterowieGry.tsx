@@ -7,12 +7,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { adresObrazu, bohaterDoGry, bohaterZGry, bohaterowie, narysujBohatera, usunBohatera, wyrzezbBohatera, zapiszBohatera, type Bohater } from '../lib/tworzenie';
 import { adresPliku } from '../lib/assety3d';
+import PodpiecieZasobu from './PodpiecieZasobu';
 
 const ETAP: Record<string, string> = { pomysl: '💡 pomysł', rysuje: '⏳ rysuje się', blad: '⚠ obraz padł', obraz: '🖼️ obraz', rzezbi: '⏳ rzeźbi się', bryla: '🗿 bryła', tekstury: '☁️ tekstury', rig: '🦴 rig + chód', 'w-grze': '🎮 w grze' };
 const ZYWIOLY = ['ogien', 'woda', 'ziemia', 'powietrze', 'eter'];
 const DROGI = ['tworca', 'opiekun', 'wedrowiec', 'badacz'];
 const PLEC: Record<string, string> = { kobieta: '♀', mezczyzna: '♂', inna: '✦' };
-type Nowy = { imie: string; plec: Bohater['plec']; zywiol: string; droga: string; opis: string };
+type Nowy = { imie: string; plec: Bohater['plec']; zywiol: string; droga: string; opis: string; obraz?: string | null; korzen?: string | null };
 
 export default function BohaterowieGry({ projekt, onAssety }: { projekt: string; onAssety?: () => void }) {
     const [lista, setLista] = useState<Bohater[]>([]);
@@ -51,6 +52,7 @@ export default function BohaterowieGry({ projekt, onAssety }: { projekt: string;
                         <select value={nowy.droga} onChange={(e) => setNowy({ ...nowy, droga: e.target.value })} className="rounded border border-slate-700 bg-black/40 px-1">{DROGI.map((z) => <option key={z}>{z}</option>)}</select>
                     </div>
                     <textarea value={nowy.opis} onChange={(e) => setNowy({ ...nowy, opis: e.target.value })} rows={2} placeholder="Wygląd: strój, rekwizyt, sylwetka (dwie nogi i A-pozę dokłada Pracownia sama)" className="w-full resize-none rounded border border-slate-700 bg-black/40 px-2 py-1 outline-none" />
+                    <PodpiecieZasobu obraz={nowy.obraz ?? null} korzen={nowy.korzen ?? null} onPodepnij={(z) => setNowy({ ...nowy, ...z, opis: nowy.opis.trim() ? nowy.opis : z.opis ?? nowy.opis })} />
                     <button onClick={() => void zrob('nowy', async () => { await zapiszBohatera(projekt, nowy); setNowy(null); })} disabled={!!praca} className="rounded-md bg-tgs-primary/80 px-2 py-0.5 text-[11px] font-semibold text-black">Dodaj bohatera</button>
                 </div>
             )}
@@ -81,6 +83,7 @@ export default function BohaterowieGry({ projekt, onAssety }: { projekt: string;
                                 {b.wGrze && przycisk(`z-${b.id}`, '✕ z gry', () => bohaterZGry(projekt, b.id))}
                                 <button onClick={() => { if (window.confirm(`Usunąć bohatera „${b.imie}” z listy? (obrazy i bryły zostają)`)) void zrob(`u-${b.id}`, () => usunBohatera(projekt, b.id)); }} title="Usuń z listy" className="ml-auto text-slate-500 hover:text-red-400"><Trash2 size={11} /></button>
                             </div>
+                            {b.etap !== 'w-grze' && <PodpiecieZasobu obraz={b.obraz} korzen={b.korzen ?? null} zajety={!!praca} onPodepnij={(z) => void zrob(`p-${b.id}`, () => zapiszBohatera(projekt, { id: b.id, ...(z.obraz !== undefined ? { obraz: z.obraz } : {}), ...(z.korzen !== undefined ? { korzen: z.korzen } : {}) }))} />}
                             {b.najlepsza && <p className="font-mono text-[9px] text-slate-600">wersja {b.najlepsza.id}{b.wersji > 1 ? ` · ${b.wersji} wersji` : ''}</p>}
                         </div>
                     </div>

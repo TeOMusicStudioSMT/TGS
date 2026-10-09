@@ -72,7 +72,7 @@ export const naGielde = (p: { rodzaj: 'zadanie' | 'projekt'; projekt: string; ty
 export type EtapBohatera = 'pomysl' | 'rysuje' | 'blad' | 'obraz' | 'rzezbi' | 'bryla' | 'tekstury' | 'rig' | 'w-grze';
 export interface Bohater {
     id: string; imie: string; plec: 'kobieta' | 'mezczyzna' | 'inna'; zywiol: string; droga: string; opis: string;
-    obraz: string | null; wGrze: { plik: string; zrodlo: string; ruch: string | null } | null;
+    obraz: string | null; korzen?: string | null; wGrze: { plik: string; zrodlo: string; ruch: string | null } | null;
     etap: EtapBohatera; najlepsza: { id: string; tekstury: boolean; ruchy: string[] } | null; wersji: number; blad: string | null; nowszaNizWGrze: boolean;
 }
 const pB = (projekt: string) => `/api/bohaterowie/${encodeURIComponent(projekt)}`;

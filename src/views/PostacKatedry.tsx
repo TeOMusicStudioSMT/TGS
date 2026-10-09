@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Landmark, Loader2 } from 'lucide-react';
 import { adresObrazu, opublikujPostac, postacBryla, postacKatedry, postacZOpisu, postacZeZdjecia, wycofajPostac, zapiszPostac, type KartaPostaci, type StanPostaci } from '../lib/tworzenie';
 import { adresPliku } from '../lib/assety3d';
+import PodpiecieZasobu from './PodpiecieZasobu';
 
 const ETAP: Record<string, string> = { brak: '— brak karty', pomysl: '💡 karta', rysuje: '⏳ rysuje się', blad: '⚠ obraz padł', obraz: '🖼️ obraz', rzezbi: '⏳ rzeźbi się', bryla: '🗿 bryła', tekstury: '☁️ tekstury', rig: '🦴 rig + chód', opublikowana: '📣 opublikowana' };
 const ZYWIOLY = ['ogien', 'woda', 'ziemia', 'powietrze', 'eter'];
@@ -85,6 +86,7 @@ export default function PostacKatedry({ onAssety }: { onAssety?: () => void }) {
                         {s.najlepsza && (etap !== 'opublikowana' || s.nowszaNizWGrze) && przycisk('publikuj', '📣 Opublikuj', () => opublikujPostac(), s.najlepsza.ruchy.includes('chod') ? 'Z chodem (animowany GLB)' : 'Bez riga — w grze stoi i oddycha', true)}
                         {s.opublikowana && przycisk('wycofaj', '✕ wycofaj', () => wycofajPostac(), 'Gra i wizytówka przestają ją pokazywać (bryły zostają)')}
                     </div>
+                    <PodpiecieZasobu obraz={k?.obraz ?? null} korzen={k?.korzen ?? null} zajety={!!praca} onPodepnij={(z) => { const opis = forma.opis.trim() ? forma.opis : z.opis ?? ''; setForma({ ...forma, opis }); void zrob('podepnij', () => zapiszPostac({ ...forma, opis, ...(z.obraz !== undefined ? { obraz: z.obraz } : {}), ...(z.korzen !== undefined ? { korzen: z.korzen } : {}) })); }} />
                     {s.blad && <p className="text-[10px] text-amber-300">⚠ {s.blad}</p>}
                     {s.nowszaNizWGrze && <p className="text-[10px] text-sky-300">Jest lepsza wersja niż opublikowana — „Opublikuj” podmieni.</p>}
                     {s.opublikowana && <p className="font-mono text-[9px] text-slate-600">opublikowana {new Date(s.opublikowana.kiedy).toLocaleString('pl-PL')} · {(s.opublikowana.bajtow / 1e6).toFixed(1)} MB{s.opublikowana.ruch ? ' · z chodem' : ''}</p>}

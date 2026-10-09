@@ -173,6 +173,7 @@ export default function Assety3D() {
     const [modelI3d, setModelI3d] = useState<'latest' | 'meshy-6-lite'>('latest');
     const [pozaI3d, setPozaI3d] = useState<'' | 'a-pose' | 't-pose'>('');
     const [wzrost, setWzrost] = useState(1.7);
+    const [scianyRig, setScianyRig] = useState(100000);   // 🔺 bryła > 300 000 ścian: Remesh do tylu przed rigiem (most sam)
     const [akcje, setAkcje] = useState<number[]>([]);
     const [biblioteka, setBiblioteka] = useState<AkcjaMeshy[] | null>(null);
     const [kategoriaAkcji, setKategoriaAkcji] = useState('');
@@ -214,7 +215,7 @@ export default function Assety3D() {
     useEffect(() => { setWycenaCh(null); }, [wybrany?.id, rodzajChmury, stylChmury, rozdzChmury, pbrChmury, scianyChmury, topologiaChmury]);
     const zlecenieChmury = (): ZlecenieChmury => rodzajChmury === 'retekstura' ? { rodzaj: 'retekstura', styl: stylChmury, rozdzielczosc: rozdzChmury, pbr: pbrChmury }
         : rodzajChmury === 'obraz3d' ? { rodzaj: 'obraz3d', model: modelI3d, rozdzielczosc: modelI3d === 'meshy-6-lite' ? '2k' : rozdzChmury, pbr: pbrChmury, poza: pozaI3d }
-            : rodzajChmury === 'rig' ? { rodzaj: 'rig', wzrost, akcje }
+            : rodzajChmury === 'rig' ? { rodzaj: 'rig', wzrost, akcje, scianyRig }
                 : rodzajChmury === 'akcje' ? { rodzaj: 'akcje', akcje }
                 : { rodzaj: 'remesh', sciany: scianyChmury, topologia: topologiaChmury };
     const opisZleceniaChmury = (): string => rodzajChmury === 'retekstura' ? `Retekstura ${rozdzChmury}${pbrChmury ? ' + PBR' : ''}`
@@ -327,7 +328,7 @@ export default function Assety3D() {
     };
     const wyslijDoChmury = async () => {
         if (!wybrany || !wycenaCh) return;
-        if (!window.confirm(`☁️ Wysłać „${wybrany.nazwa}” do Meshy?\n\n${opisZleceniaChmury()}\nKoszt: ${wycenaCh.kredyty} kredytów (≈ $${wycenaCh.usdOkolo}) — saldo ${wycenaCh.saldo}.\nBryła (${wycenaCh.mb} MB) wyjdzie z Katedry do chmury Meshy. Wynik wróci jako nowa wersja, stara zostaje.`)) return;
+        if (!window.confirm(`☁️ Wysłać „${wybrany.nazwa}” do Meshy?\n\n${opisZleceniaChmury()}\n${wycenaCh.zlecenie?.przedRigiem ? `🔺 Bryła ma ${wycenaCh.zlecenie.przedRigiem.z.toLocaleString('pl-PL')} ścian (limit riga 300 000) — najpierw Remesh do ${wycenaCh.zlecenie.przedRigiem.na.toLocaleString('pl-PL')} (+5 kr.).\n` : ''}Koszt: ${wycenaCh.kredyty} kredytów (≈ $${wycenaCh.usdOkolo}) — saldo ${wycenaCh.saldo}.\nBryła (${wycenaCh.mb} MB) wyjdzie z Katedry do chmury Meshy. Wynik wróci jako nowa wersja, stara zostaje.`)) return;
         setBlad(null);
         try {
             const z = await zlecChmure(wybrany.id, zlecenieChmury(), wycenaCh.kredyty);
@@ -477,6 +478,7 @@ export default function Assety3D() {
                                         ? <p className="text-[11px] text-amber-300/90">🦴 Rig potrzebuje bryły z TEKSTURAMI (wersja z chmury). Najpierw „🎨 Retekstura” albo „🧊 Image-to-3D” tej bryły, potem wybierz nową wersję i wróć tutaj.</p>
                                         : <p className="text-[10px] leading-snug text-slate-500">Postać humanoidalna (dwie nogi, ręce), twarzą w stronę +Z. Rig = 5 kr. i daje gratis CHÓD i BIEG; akcje z biblioteki po 3 kr. (≤ 10, jeden plik). Ruchy lądują w zakładce „6 Ruch” jak ruchy z Blendera — „Do gry” z animacją.</p>}
                                     {rodzajChmury === 'rig' && <label className="flex items-center gap-2"><span className="w-16">Wzrost</span><input type="range" min={0.3} max={3} step={0.05} value={wzrost} onChange={(e) => { setWzrost(Number(e.target.value)); setWycenaCh(null); }} className="min-w-0 flex-1 accent-sky-400" /><span className="w-12 text-right font-mono text-[10px]">{wzrost.toFixed(2)} m</span></label>}
+                                    {rodzajChmury === 'rig' && <label className="flex items-center gap-2" title="Rig Meshy przyjmuje najwyżej 300 000 ścian. Gdy bryła ma więcej (Image-to-3D bywa ~1 mln), most sam robi Remesh do tylu ścian przed rigiem (+5 kr., widać w wycenie)."><span className="w-16">Ściany</span><select value={scianyRig} onChange={(e) => { setScianyRig(Number(e.target.value)); setWycenaCh(null); }} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{[30000, 60000, 100000, 200000, 300000].map((n) => <option key={n} value={n}>{n.toLocaleString('pl-PL')}{n === 100000 ? ' (gra)' : ''}</option>)}</select><span className="text-[10px] text-slate-500">gdy bryła ma ponad 300 tys. — Remesh przed rigiem</span></label>}
                                     <div className="flex flex-wrap items-center gap-1">
                                         <span className="text-[10px] text-slate-500">🎛️ auto:</span>
                                         {Object.entries(ZESTAWY_AKCJI).map(([k, n]) => <button key={k} onClick={() => void auto(k)} disabled={!!dobieram || !chmuraKlucz} title="Dobierz do 10 akcji z biblioteki (bez tych, które bryła już ma) — możesz potem zmienić" className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] hover:border-sky-400 disabled:opacity-40">{dobieram === k ? '…' : n}</button>)}
@@ -520,7 +522,7 @@ export default function Assety3D() {
                             )}
                             {!wycenaCh && (chmuraKlucz === null ? <p className="text-[10px] text-amber-300/90">Most nie odpowiada o stan chmury — sprawdź, czy Katedra działa.</p>
                                 : rodzajChmury === 'retekstura' && stylChmury.trim().length < 3 && chmuraKlucz ? <p className="text-[10px] text-slate-400">✍️ Opisz styl tekstur (min. 3 znaki), wtedy „💰 Wyceń” się odblokuje.</p> : null)}
-                            {wycenaCh && <p className={`text-[11px] ${wycenaCh.wystarczy && !wycenaCh.zaDuzy ? 'text-emerald-300' : 'text-amber-300'}`}>💰 {wycenaCh.kredyty} kredytów (≈ ${wycenaCh.usdOkolo}) · saldo Meshy {wycenaCh.saldo}{!wycenaCh.wystarczy ? ' — za mało' : ''} · plik {wycenaCh.mb} MB{wycenaCh.zaDuzy ? ' — za duży, najpierw uprość' : ''}</p>}
+                            {wycenaCh && <p className={`text-[11px] ${wycenaCh.wystarczy && !wycenaCh.zaDuzy ? 'text-emerald-300' : 'text-amber-300'}`}>💰 {wycenaCh.kredyty} kredytów (≈ ${wycenaCh.usdOkolo}){wycenaCh.zlecenie?.przedRigiem ? ` · z Remeshem ${wycenaCh.zlecenie.przedRigiem.z.toLocaleString('pl-PL')} → ${wycenaCh.zlecenie.przedRigiem.na.toLocaleString('pl-PL')} ścian (limit riga 300 000)` : ''} · saldo Meshy {wycenaCh.saldo}{!wycenaCh.wystarczy ? ' — za mało' : ''} · plik {wycenaCh.mb} MB{wycenaCh.zaDuzy ? ' — za duży, najpierw uprość' : ''}</p>}
                             <div className="flex gap-2">
                                 <button onClick={() => void wycenChmury()} disabled={!chmuraKlucz || poprawiam || (rodzajChmury === 'retekstura' && stylChmury.trim().length < 3) || (rodzajChmury === 'rig' && !wybrany.tekstury)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-sky-400 disabled:opacity-40">💰 Wyceń</button>
                                 <button onClick={() => void wyslijDoChmury()} disabled={!wycenaCh || !wycenaCh.wystarczy || wycenaCh.zaDuzy || (!!zadanieCh && zadanieCh.stan !== 'gotowe' && zadanieCh.stan !== 'blad')} className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-sky-600/70 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"><Cloud size={12} /> {wycenaCh ? `Wyślij za ${wycenaCh.kredyty} kredytów` : 'Najpierw wyceń'}</button>

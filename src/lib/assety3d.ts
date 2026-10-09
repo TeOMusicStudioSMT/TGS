@@ -63,14 +63,14 @@ export const zaswiec = (id: string, p: { fragment: Pudelko; prog: number; kolor:
 // ☁️ Dopracowanie w chmurze (Meshy, most: services/ChmuraBryl.js) — wycena → zgoda na kwotę → zlecenie w tle → nowa wersja.
 export type ZlecenieChmury = { rodzaj: 'retekstura'; styl: string; rozdzielczosc: '2k' | '4k' | '8k'; pbr: boolean } | { rodzaj: 'remesh'; sciany: number; topologia: 'triangle' | 'quad' }
   | { rodzaj: 'obraz3d'; model: 'latest' | 'meshy-6-lite'; rozdzielczosc: '2k' | '4k' | '8k'; pbr: boolean; poza: '' | 'a-pose' | 't-pose' }
-  | { rodzaj: 'rig'; wzrost: number; akcje: number[] } | { rodzaj: 'akcje'; akcje: number[] };
+  | { rodzaj: 'rig'; wzrost: number; akcje: number[]; scianyRig?: number } | { rodzaj: 'akcje'; akcje: number[] };
 /** 🎛️ Auto-dobór ≤ 10 akcji z biblioteki do zestawu (gra, walka, taniec…) — bez tych, które bryła już ma. Więcej = kolejna paczka na tym samym rigu. */
 export const ZESTAWY_AKCJI: Record<string, string> = { gra: '🎮 podstawy gry', walka: '⚔️ walka', taniec: '💃 taniec', codzienne: '🏡 codzienne', cialo: '🤸 ruchy ciała' };
 export const zestawAkcji = (id: string, zestaw: string) => api<{ akcje: AkcjaMeshy[] }>(`/api/assety3d/chmura/${encodeURIComponent(id)}/zestaw/${encodeURIComponent(zestaw)}`).then((d) => d.akcje);
 /** 📚 Akcja z biblioteki animacji Meshy (rig: 3 kredyty za akcję, ≤ 10). */
 export interface AkcjaMeshy { id: number; nazwa: string; klucz: string; kategoria: string; podkategoria: string; podglad: string | null }
 export const akcjeMeshy = (kategoria = '', szukaj = '') => api<{ akcje: AkcjaMeshy[] }>(`/api/assety3d/chmura/akcje?kategoria=${encodeURIComponent(kategoria)}&szukaj=${encodeURIComponent(szukaj)}`).then((d) => d.akcje);
-export interface WycenaChmury { kredyty: number; usdOkolo: number; saldo: number; wystarczy: boolean; mb: number; zaDuzy: boolean; cennik: string }
+export interface WycenaChmury { kredyty: number; usdOkolo: number; saldo: number; wystarczy: boolean; mb: number; zaDuzy: boolean; cennik: string; zlecenie?: { przedRigiem?: { z: number; na: number } } }
 export interface ZadanieChmury { id: string; bryla: string; stan: string; postep: number; kredyty: number; asset: string | null; blad: string | null; ruchy?: string[]; uwagi?: string[] }
 export const stanChmury = () => api<{ maKlucz: boolean; usdZaKredyt: number; zadania: ZadanieChmury[] }>('/api/assety3d/chmura');
 export const wycenChmure = (id: string, zlecenie: ZlecenieChmury) => api<WycenaChmury>(`/api/assety3d/chmura/${encodeURIComponent(id)}/wycena`, { method: 'POST', body: JSON.stringify({ zlecenie }) });
