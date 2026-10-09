@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, akcjeMeshy, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
@@ -35,6 +35,8 @@ function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { ur
         const el = ref.current; if (!el || !url) return;
         const w = el.clientWidth, h = el.clientHeight || 320;
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setSize(w, h); renderer.setPixelRatio(Math.min(2, window.devicePixelRatio)); el.appendChild(renderer.domElement);
+        // Karta graficzna pełna (np. podcast, ComfyUI) → przeglądarka zabiera kontekst WebGL. Mówimy to, zamiast czernieć.
+        renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); setInfo('⚠ karta graficzna odebrała podglądowi pamięć (zajęta innym zadaniem) — podgląd wróci po zwolnieniu karty; przełącz bryłę, żeby spróbować znów'); });
         const scena = new THREE.Scene();
         const kamera = new THREE.PerspectiveCamera(40, w / h, 0.01, 100); kamera.position.set(1.6, 1.2, 1.6);
         scena.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.4)); const d = new THREE.DirectionalLight(0xffffff, 1.2); d.position.set(3, 5, 2); scena.add(d);
@@ -135,7 +137,16 @@ export default function Assety3D() {
     const [glebiaOka, setGlebiaOka] = useState<'cala' | 'przod' | 'tyl'>('przod');
     // ☁️ chmura (Meshy): rodzaj, ustawienia, wycena (koszt i saldo PRZED wysłaniem), zadanie w tle
     const [chmuraKlucz, setChmuraKlucz] = useState<boolean | null>(null);
-    const [rodzajChmury, setRodzajChmury] = useState<'retekstura' | 'remesh'>('retekstura');
+    const [rodzajChmury, setRodzajChmury] = useState<'retekstura' | 'remesh' | 'obraz3d' | 'rig'>('retekstura');
+    // 🧊 Image-to-3D (Meshy 7.1 / 6 lite) i 🦴 rig postaci (chód + bieg gratis, akcje z biblioteki po 3 kr.)
+    const [modelI3d, setModelI3d] = useState<'latest' | 'meshy-6-lite'>('latest');
+    const [pozaI3d, setPozaI3d] = useState<'' | 'a-pose' | 't-pose'>('');
+    const [wzrost, setWzrost] = useState(1.7);
+    const [akcje, setAkcje] = useState<number[]>([]);
+    const [biblioteka, setBiblioteka] = useState<AkcjaMeshy[] | null>(null);
+    const [kategoriaAkcji, setKategoriaAkcji] = useState('');
+    const [szukajAkcji, setSzukajAkcji] = useState('');
+    const [bladBiblioteki, setBladBiblioteki] = useState<string | null>(null);
     const [stylChmury, setStylChmury] = useState('');
     const [rozdzChmury, setRozdzChmury] = useState<'2k' | '4k' | '8k'>('2k');
     const [pbrChmury, setPbrChmury] = useState(false);
@@ -158,7 +169,19 @@ export default function Assety3D() {
     }, []);
     useEffect(() => { zwiadyPromocji().then((z) => setPromocje(z.find((x) => /meshy/i.test(x.usluga)) ?? null)).catch(() => {}); }, []);
     useEffect(() => { setWycenaCh(null); }, [wybrany?.id, rodzajChmury, stylChmury, rozdzChmury, pbrChmury, scianyChmury, topologiaChmury]);
-    const zlecenieChmury = (): ZlecenieChmury => rodzajChmury === 'retekstura' ? { rodzaj: 'retekstura', styl: stylChmury, rozdzielczosc: rozdzChmury, pbr: pbrChmury } : { rodzaj: 'remesh', sciany: scianyChmury, topologia: topologiaChmury };
+    const zlecenieChmury = (): ZlecenieChmury => rodzajChmury === 'retekstura' ? { rodzaj: 'retekstura', styl: stylChmury, rozdzielczosc: rozdzChmury, pbr: pbrChmury }
+        : rodzajChmury === 'obraz3d' ? { rodzaj: 'obraz3d', model: modelI3d, rozdzielczosc: modelI3d === 'meshy-6-lite' ? '2k' : rozdzChmury, pbr: pbrChmury, poza: pozaI3d }
+            : rodzajChmury === 'rig' ? { rodzaj: 'rig', wzrost, akcje }
+                : { rodzaj: 'remesh', sciany: scianyChmury, topologia: topologiaChmury };
+    const opisZleceniaChmury = (): string => rodzajChmury === 'retekstura' ? `Retekstura ${rozdzChmury}${pbrChmury ? ' + PBR' : ''}`
+        : rodzajChmury === 'obraz3d' ? `Image-to-3D (${modelI3d === 'latest' ? 'Meshy 7.1' : 'Meshy 6 lite'}, tekstury ${modelI3d === 'meshy-6-lite' ? '2k' : rozdzChmury}${pozaI3d ? `, ${pozaI3d}` : ''}) z obrazu bryły`
+            : rodzajChmury === 'rig' ? `Rig postaci ${wzrost} m + chód i bieg${akcje.length ? ` + ${akcje.length} akcji z biblioteki` : ''}`
+                : `Remesh ${scianyChmury.toLocaleString('pl-PL')} ścian (${topologiaChmury === 'quad' ? 'czworokąty' : 'trójkąty'})`;
+    useEffect(() => {
+        if (rodzajChmury !== 'rig' || !chmuraKlucz) return;
+        const t = setTimeout(() => { akcjeMeshy(kategoriaAkcji, szukajAkcji).then((a) => { setBiblioteka(a); setBladBiblioteki(null); }).catch((e) => setBladBiblioteki((e as Error).message)); }, 300);
+        return () => clearTimeout(t);
+    }, [rodzajChmury, chmuraKlucz, kategoriaAkcji, szukajAkcji]);
     useEffect(() => {
         setKolor(KOLOR_ZERO); setWycinekFr(null); setSylwetka(null); setWycinekOka(null);
         if (wybrany?.stan === 'gotowe') sylwetkaBryly(wybrany.id).then(setSylwetka).catch(() => setSylwetka(null));
@@ -259,7 +282,7 @@ export default function Assety3D() {
     };
     const wyslijDoChmury = async () => {
         if (!wybrany || !wycenaCh) return;
-        if (!window.confirm(`☁️ Wysłać „${wybrany.nazwa}” do Meshy?\n\n${rodzajChmury === 'retekstura' ? `Retekstura ${rozdzChmury}${pbrChmury ? ' + PBR' : ''}` : `Remesh ${scianyChmury.toLocaleString('pl-PL')} ścian (${topologiaChmury === 'quad' ? 'czworokąty' : 'trójkąty'})`}\nKoszt: ${wycenaCh.kredyty} kredytów (≈ $${wycenaCh.usdOkolo}) — saldo ${wycenaCh.saldo}.\nBryła (${wycenaCh.mb} MB) wyjdzie z Katedry do chmury Meshy. Wynik wróci jako nowa wersja, stara zostaje.`)) return;
+        if (!window.confirm(`☁️ Wysłać „${wybrany.nazwa}” do Meshy?\n\n${opisZleceniaChmury()}\nKoszt: ${wycenaCh.kredyty} kredytów (≈ $${wycenaCh.usdOkolo}) — saldo ${wycenaCh.saldo}.\nBryła (${wycenaCh.mb} MB) wyjdzie z Katedry do chmury Meshy. Wynik wróci jako nowa wersja, stara zostaje.`)) return;
         setBlad(null);
         try {
             const z = await zlecChmure(wybrany.id, zlecenieChmury(), wycenaCh.kredyty);
@@ -388,9 +411,41 @@ export default function Assety3D() {
                             <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Cloud size={12} /> Dopracuj w chmurze · Meshy</p>
                             {chmuraKlucz === false && <p className="text-[11px] text-amber-300/90">Brak klucza Meshy w moście — Hub → TeO Kibel → wklej klucz <code>msy_…</code> → „🔗 Udostępnij mostowi”. API Meshy wymaga płatnego planu (Pro: 1000 kredytów / $20).</p>}
                             <div className="flex gap-2 text-[11px]">
-                                {(['retekstura', 'remesh'] as const).map((r) => <button key={r} onClick={() => setRodzajChmury(r)} className={`rounded-lg border px-2 py-1 ${rodzajChmury === r ? 'border-sky-400 text-sky-200' : 'border-slate-700 text-slate-400'}`}>{r === 'retekstura' ? '🎨 Retekstura' : '🔺 Remesh'}</button>)}
+                                {(['retekstura', 'remesh', 'obraz3d', 'rig'] as const).map((r) => <button key={r} onClick={() => { setRodzajChmury(r); setWycenaCh(null); }} title={{ retekstura: 'nowe tekstury z opisu stylu', remesh: 'nowa topologia (ściany)', obraz3d: 'nowa bryła z obrazu tej bryły — Meshy zamiast TRELLIS (tekstury, lepsza geometria)', rig: 'szkielet postaci humanoidalnej + chód, bieg i akcje z biblioteki → zakładka 6 Ruch' }[r]} className={`rounded-lg border px-2 py-1 ${rodzajChmury === r ? 'border-sky-400 text-sky-200' : 'border-slate-700 text-slate-400'}`}>{{ retekstura: '🎨 Retekstura', remesh: '🔺 Remesh', obraz3d: '🧊 Image-to-3D', rig: '🦴 Rig + ruchy' }[r]}</button>)}
                             </div>
-                            {rodzajChmury === 'retekstura' ? (<>
+                            {rodzajChmury === 'obraz3d' ? (
+                                <div className="space-y-1 text-[11px] text-slate-400">
+                                    <p className="text-[10px] leading-snug text-slate-500">Obraz, z którego powstała ta bryła → Meshy liczy nową bryłę z teksturami (chmurowa alternatywa TRELLIS — dla brył-bohaterów gry, filmu, fashion). Wynik = nowa wersja obok starej.</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <select value={modelI3d} onChange={(e) => { setModelI3d(e.target.value as 'latest' | 'meshy-6-lite'); setWycenaCh(null); }} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="latest">Meshy 7.1 (30 kr. 2K/4K, 35 kr. 8K)</option><option value="meshy-6-lite">Meshy 6 lite (15 kr., 2K)</option></select>
+                                        {modelI3d === 'latest' && <select value={rozdzChmury} onChange={(e) => { setRozdzChmury(e.target.value as '2k' | '4k' | '8k'); setWycenaCh(null); }} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="2k">tekstury 2K</option><option value="4k">tekstury 4K</option><option value="8k">tekstury 8K</option></select>}
+                                        <select value={pozaI3d} onChange={(e) => setPozaI3d(e.target.value as '' | 'a-pose' | 't-pose')} title="Postać pod rig: A-poza / T-poza ułatwia szkielet" className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="">poza jak na obrazie</option><option value="a-pose">A-poza (pod rig)</option><option value="t-pose">T-poza (pod rig)</option></select>
+                                        <label className="flex items-center gap-1"><input type="checkbox" checked={pbrChmury} onChange={(e) => setPbrChmury(e.target.checked)} /> PBR</label>
+                                    </div>
+                                </div>
+                            ) : rodzajChmury === 'rig' ? (
+                                <div className="space-y-1.5 text-[11px] text-slate-400">
+                                    {!wybrany.tekstury
+                                        ? <p className="text-[11px] text-amber-300/90">🦴 Rig potrzebuje bryły z TEKSTURAMI (wersja z chmury). Najpierw „🎨 Retekstura” albo „🧊 Image-to-3D” tej bryły, potem wybierz nową wersję i wróć tutaj.</p>
+                                        : <p className="text-[10px] leading-snug text-slate-500">Postać humanoidalna (dwie nogi, ręce), twarzą w stronę +Z. Rig = 5 kr. i daje gratis CHÓD i BIEG; akcje z biblioteki po 3 kr. (≤ 10, jeden plik). Ruchy lądują w zakładce „6 Ruch” jak ruchy z Blendera — „Do gry” z animacją.</p>}
+                                    <label className="flex items-center gap-2"><span className="w-16">Wzrost</span><input type="range" min={0.3} max={3} step={0.05} value={wzrost} onChange={(e) => { setWzrost(Number(e.target.value)); setWycenaCh(null); }} className="min-w-0 flex-1 accent-sky-400" /><span className="w-12 text-right font-mono text-[10px]">{wzrost.toFixed(2)} m</span></label>
+                                    <div className="flex gap-1.5">
+                                        <select value={kategoriaAkcji} onChange={(e) => setKategoriaAkcji(e.target.value)} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5"><option value="">wszystkie akcje</option><option value="WalkAndRun">chód i bieg</option><option value="BodyMovements">ruchy ciała</option><option value="DailyActions">codzienne</option><option value="Fighting">walka</option><option value="Dancing">taniec</option></select>
+                                        <input value={szukajAkcji} onChange={(e) => setSzukajAkcji(e.target.value)} placeholder="szukaj (np. idle, attack, wave)" className="min-w-0 flex-1 rounded border border-slate-700 bg-black/40 px-2 py-0.5 outline-none" />
+                                    </div>
+                                    {bladBiblioteki && <p className="text-[10px] text-amber-300">⚠ {bladBiblioteki}</p>}
+                                    <div className="max-h-36 space-y-0.5 overflow-y-auto pr-1">
+                                        {(biblioteka ?? []).slice(0, 120).map((a) => (
+                                            <label key={a.id} className="flex items-center gap-1.5 text-[11px] text-slate-300" title={`${a.kategoria} · ${a.podkategoria} · #${a.id}`}>
+                                                <input type="checkbox" checked={akcje.includes(a.id)} disabled={!akcje.includes(a.id) && akcje.length >= 10} onChange={(e) => { setAkcje((x) => (e.target.checked ? [...x, a.id] : x.filter((y) => y !== a.id))); setWycenaCh(null); }} />
+                                                <span className="truncate">{a.nazwa}</span>{a.podglad && <a href={a.podglad} target="_blank" rel="noreferrer" className="ml-auto text-[10px] text-sky-400 hover:underline">podgląd</a>}
+                                            </label>
+                                        ))}
+                                        {biblioteka && biblioteka.length === 0 && <p className="text-[10px] text-slate-500">Nic nie pasuje.</p>}
+                                    </div>
+                                    <p className="text-[10px] text-slate-500">Wybrane akcje: {akcje.length}/10 · koszt {5 + 3 * akcje.length} kr.</p>
+                                </div>
+                            ) : rodzajChmury === 'retekstura' ? (<>
                                 <div className="flex gap-1.5">
                                     <textarea value={stylChmury} onChange={(e) => setStylChmury(e.target.value)} rows={3} maxLength={800} placeholder="Styl tekstur, np. „czarna sierść mieniąca się jak opal, świecące bursztynowe środkowe oko”" className="min-w-0 flex-1 resize-none rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-[11px] outline-none" />
                                     <div className="flex flex-col gap-1">
@@ -414,10 +469,11 @@ export default function Assety3D() {
                                 : rodzajChmury === 'retekstura' && stylChmury.trim().length < 3 && chmuraKlucz ? <p className="text-[10px] text-slate-400">✍️ Opisz styl tekstur (min. 3 znaki), wtedy „💰 Wyceń” się odblokuje.</p> : null)}
                             {wycenaCh && <p className={`text-[11px] ${wycenaCh.wystarczy && !wycenaCh.zaDuzy ? 'text-emerald-300' : 'text-amber-300'}`}>💰 {wycenaCh.kredyty} kredytów (≈ ${wycenaCh.usdOkolo}) · saldo Meshy {wycenaCh.saldo}{!wycenaCh.wystarczy ? ' — za mało' : ''} · plik {wycenaCh.mb} MB{wycenaCh.zaDuzy ? ' — za duży, najpierw uprość' : ''}</p>}
                             <div className="flex gap-2">
-                                <button onClick={() => void wycenChmury()} disabled={!chmuraKlucz || poprawiam || (rodzajChmury === 'retekstura' && stylChmury.trim().length < 3)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-sky-400 disabled:opacity-40">💰 Wyceń</button>
+                                <button onClick={() => void wycenChmury()} disabled={!chmuraKlucz || poprawiam || (rodzajChmury === 'retekstura' && stylChmury.trim().length < 3) || (rodzajChmury === 'rig' && !wybrany.tekstury)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs hover:border-sky-400 disabled:opacity-40">💰 Wyceń</button>
                                 <button onClick={() => void wyslijDoChmury()} disabled={!wycenaCh || !wycenaCh.wystarczy || wycenaCh.zaDuzy || (!!zadanieCh && zadanieCh.stan !== 'gotowe' && zadanieCh.stan !== 'blad')} className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-sky-600/70 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"><Cloud size={12} /> {wycenaCh ? `Wyślij za ${wycenaCh.kredyty} kredytów` : 'Najpierw wyceń'}</button>
                             </div>
                             {zadanieCh && zadanieCh.stan !== 'gotowe' && <p className="font-mono text-[10px] text-sky-300">{zadanieCh.stan === 'blad' ? `⚠ ${zadanieCh.blad}` : `☁️ ${zadanieCh.stan} · ${zadanieCh.postep}%`}</p>}
+                            {zadanieCh?.stan === 'gotowe' && <p className="font-mono text-[10px] text-emerald-300">✓ gotowe → {zadanieCh.asset}{zadanieCh.ruchy?.length ? ` · ruchy: ${zadanieCh.ruchy.join(', ')} (zakładka 6 Ruch)` : ''} · {zadanieCh.kredyty} kr.{zadanieCh.uwagi?.length ? ` · ⚠ ${zadanieCh.uwagi.join('; ')}` : ''}</p>}
                             <p className="text-[10px] leading-snug text-slate-500">Bryła wychodzi z Katedry do Meshy dopiero po „Wyślij” i potwierdzeniu kwoty. Wynik ma tekstury i wraca jako nowa wersja obok starej.</p>
                             <div className="space-y-1 border-t border-slate-800 pt-1.5">
                                 <button onClick={() => void szukajKodowMeshy()} disabled={szukamPromocji} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] hover:border-amber-300 disabled:opacity-40">{szukamPromocji ? <Loader2 size={11} className="animate-spin" /> : '🏷️'} Zwiadowca: szukaj kodów Meshy</button>
