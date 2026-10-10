@@ -11,6 +11,7 @@ import { Film, Loader2, RefreshCw, Trash2, Gamepad2, Play } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { zwolnijScene } from '../lib/zwolnijScene';
+import PasekSortowania, { posortuj, useSortowanie } from './PasekSortowania';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
 import { adresPliku, listaAssetow, type Asset3D } from '../lib/assety3d';
@@ -51,6 +52,8 @@ function PodgladRuchu({ url }: { url: string | null }) {
 
 export default function RuchBryl() {
     const [assety, setAssety] = useState<AssetZRuchem[]>([]);
+    const [sortR, zmienSortR] = useSortowanie('ruch');
+    const assetyWidoczne = posortuj(assety, sortR, { data: (a) => a.utworzono ?? '', nazwa: (a) => a.opis || a.nazwa, tekst: (a) => `${a.nazwa} ${(a.ruchy ?? []).map((r) => r.ruch).join(' ')}`, filtry: { zruchem: (a) => (a.ruchy?.length ?? 0) > 0, bezruchu: (a) => !(a.ruchy?.length), rig: (a) => a.chmura?.rodzaj === 'rig' || (a.ruchy ?? []).some((r) => String(r.ruch) === 'chod'), tekstury: (a) => !!a.tekstury } });
     const [ruchyInfo, setRuchyInfo] = useState<RuchInfo[]>([]);
     const [gry, setGry] = useState<ProjektGry[]>([]);
     const [wybrany, setWybrany] = useState<AssetZRuchem | null>(null);
@@ -109,8 +112,9 @@ export default function RuchBryl() {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr_380px]">
                 <aside className="space-y-1">
                     <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Gotowe bryły</p>
+                    <PasekSortowania s={sortR} zmien={zmienSortR} ile={assetyWidoczne.length} razem={assety.length} filtry={{ zruchem: '🎞️ z ruchami', bezruchu: '— bez ruchu', rig: '🦴 rig (chód)', tekstury: '☁️ z teksturami' }} />
                     {!assety.length && <p className="rounded-xl border border-slate-800 bg-tgs-panel/60 p-4 text-xs text-slate-500">Nie ma gotowych brył. Zrób je w Obrazach albo Assetach 3D.</p>}
-                    {assety.map((a) => (
+                    {assetyWidoczne.map((a) => (
                         <button key={a.id} onClick={() => setWybrany(a)} className={`flex w-full items-center gap-2 rounded-lg border p-1.5 text-left ${wybrany?.id === a.id ? 'border-tgs-primary/50 bg-slate-800' : 'border-slate-800 bg-tgs-panel/60 hover:border-slate-600'}`}>
                             <img src={adresPliku(a.id, 'obraz.png')} alt="" className="h-10 w-10 rounded object-contain bg-black/40" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
                             <span className="min-w-0 flex-1"><span className="block truncate text-sm">{a.nazwa}</span><span className="font-mono text-[10px] text-slate-500">{a.ruchy?.length ? `ruchy: ${a.ruchy.map((r) => r.ruch).join(', ')}` : 'bez ruchu'}</span></span>

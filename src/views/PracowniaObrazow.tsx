@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ImageIcon, Loader2, RefreshCw, Trash2, Wand2, Box, Mountain, Crop, X } from 'lucide-react';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
+import PasekSortowania, { posortuj, useSortowanie } from './PasekSortowania';
 import { adresObrazu, brylaZObrazu, brakujaceGalezie, elementyKrainy, galezieProjektu, nowePropozycje, uzupelnijGalezie, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
 
 /** Zaznaczanie wycinka myszą na obrazie — ułamki 0–1 względem obrazu. */
@@ -95,7 +96,10 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
 
     const biezacaGalaz = galezie.find((g) => g.id === galaz) ?? null;
     const propozycje = (biezacaGalaz?.propozycje ?? []).filter((p) => !krajobraz || p.styl === 'krajobraz');
-    const widoczne = lista.filter((o) => (krajobraz ? o.styl === 'krajobraz' : o.styl !== 'krajobraz') && (!galaz || o.galaz === galaz));
+    const [sort, zmienSort] = useSortowanie(krajobraz ? 'krajobrazy' : 'obrazy');
+    const wGalezi = lista.filter((o) => (krajobraz ? o.styl === 'krajobraz' : o.styl !== 'krajobraz') && (!galaz || o.galaz === galaz));
+    const FILTRY_OBRAZOW: Record<string, (o: ObrazGry) => boolean> = { do3d: (o) => !!o.do3d, zbryla: (o) => (o.bryly?.length ?? 0) > 0, bezbryly: (o) => o.stan === 'gotowe' && !(o.bryly?.length), trwa: (o) => o.stan === 'trwa', blad: (o) => o.stan === 'blad' };
+    const widoczne = posortuj(wGalezi, sort, { data: (o) => o.utworzono ?? '', nazwa: (o) => o.opis ?? '', tekst: (o) => `${o.galaz ?? ''} ${o.styl}`, filtry: FILTRY_OBRAZOW });
 
     const rysuj = async () => {
         setBlad(null); setPraca(true);
@@ -176,6 +180,7 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
                 </aside>
 
                 <section className="min-w-0">
+                    <PasekSortowania s={sort} zmien={zmienSort} ile={widoczne.length} razem={wGalezi.length} filtry={krajobraz ? { trwa: '⏳ rysuje się', blad: '⚠ błąd' } : { do3d: '🧊 prosto do 3D', zbryla: '🗿 z bryłą', bezbryly: '🖼️ bez bryły', trwa: '⏳ rysuje się', blad: '⚠ błąd' }} />
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                         {!widoczne.length && <p className="col-span-full rounded-xl border border-slate-800 bg-tgs-panel/60 p-6 text-center text-sm text-slate-500">{galaz ? 'W tej gałęzi jeszcze nic. Kliknij propozycję i „Narysuj”.' : 'Pusto. Wybierz grę i gałąź świata albo opisz własny obraz.'}</p>}
                         {widoczne.map((o) => (

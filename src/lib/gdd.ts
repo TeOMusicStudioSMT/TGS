@@ -36,7 +36,14 @@ export interface Produkcja { stan: 'trwa' | 'gotowe' | 'blad' | 'przerwana'; od:
 /** Propozycja Reżysera. `kamienie` = PEŁNY plan po scaleniu w moście (Gdd.scalKamienie: gotowe zadania zachowują stan). */
 export interface Propozycja { tytul?: string; gatunek?: string; perspektywa?: string; sekcje?: Partial<Record<Sekcja, string>>; kamienie?: Kamien[]; filmy?: FilmGdd[]; }
 /** 🎬 Film gry (cutscenka/intro) — jedno ujęcie Wan 2.2 przy zdarzeniu gry (most: Gdd.filmy, services/FilmyGry.js). */
-export interface FilmGdd { id: string; zdarzenie: string; tytul: string; opis: string; sekundy: number; stan: 'pomysl' | 'zlecony' | 'gotowy' | 'blad'; plik: string | null; prompt: string | null; blad?: string | null; kiedy?: string | null }
+export interface FilmGdd {
+    id: string; zdarzenie: string; tytul: string; opis: string; sekundy: number; stan: 'pomysl' | 'zlecony' | 'gotowy' | 'blad'; plik: string | null; prompt: string | null; blad?: string | null; kiedy?: string | null;
+    /** 🎥 Reżyser Wideo: silnik, obsada (id z /api/gdd/:id/obsada), ruch kamery, kadr FLUX i kto w nim zagrał. */
+    silnik?: 'flux-wan' | 'flux' | 'wan'; postacie?: string[]; ruch?: 'najazd' | 'odjazd' | 'w-lewo' | 'w-prawo' | 'w-gore' | 'staly' | null;
+    kadr?: string | null; kadrPrompt?: string | null; obsadaUzyta?: { id: string; imie: string }[]; silnikUzyty?: string | null;
+}
+/** 🎭 Obsada gry dla Reżysera Wideo: postać Katedry, bohaterowie, obrazy Pracowni (postacie, Mini-TeOgochi, stwory). */
+export interface CzlonekObsady { id: string; imie: string; opis: string }
 
 async function api<T>(sciezka: string, init?: RequestInit): Promise<T> {
     const r = await fetch(`${BRIDGE}${sciezka}`, { headers: init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }, ...init });
@@ -49,6 +56,7 @@ const p = (id: string) => `/api/gdd/${encodeURIComponent(id)}`;
 export const silnikiGdd = () => api<{ silniki: Record<string, SilnikGry> }>('/api/gdd/silniki').then((d) => d.silniki);
 export const wczytajGdd = (id: string) => api<{ gdd: Gdd | null; produkcja: Produkcja | null }>(p(id));
 export const zdarzeniaGry = () => api<{ zdarzenia: Record<string, string> }>('/api/gdd/zdarzenia').then((d) => d.zdarzenia);
+export const obsadaGry = (id: string) => api<{ obsada: CzlonekObsady[] }>(`${p(id)}/obsada`).then((d) => d.obsada);
 export const zlecFilm = (id: string, film: string) => api<{ film: FilmGdd }>(`${p(id)}/film/${encodeURIComponent(film)}/zlec`, { method: 'POST', body: '{}' }).then((d) => d.film);
 export const zapiszGdd = (id: string, gdd: Partial<Gdd>) => api<{ gdd: Gdd }>(p(id), { method: 'PUT', body: JSON.stringify({ gdd }) }).then((d) => d.gdd);
 export const importujTekst = (id: string, tekst: string, silnik: string, model?: string) => api<{ gdd: Gdd }>(`${p(id)}/import`, { method: 'POST', body: JSON.stringify({ tekst, silnik, model }) }).then((d) => d.gdd);

@@ -11,6 +11,7 @@ import { Box, Loader2, RefreshCw, Trash2, Upload, Wand2, Gamepad2, Image as Imag
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { zwolnijScene } from '../lib/zwolnijScene';
+import PasekSortowania, { posortuj, useSortowanie } from './PasekSortowania';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
 import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, zestawAkcji, ZESTAWY_AKCJI, BIOMY_OTOCZENIA, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
@@ -138,6 +139,10 @@ function PodgladGlb({ url, kolor = null, fragment = null, swiatlo = null }: { ur
 export default function Assety3D() {
     const [stan, setStan] = useState<StanAssetow | null>(null);
     const [assety, setAssety] = useState<Asset3D[]>([]);
+    // ↕️ sortowanie i filtry biblioteki (PasekSortowania)
+    const [sortA, zmienSortA] = useSortowanie('assety3d');
+    const maRuchy = (a: Asset3D) => (((a as Asset3D & { ruchy?: unknown[] }).ruchy?.length ?? 0) > 0) || a.chmura?.rodzaj === 'rig';
+    const assetyWidoczne = posortuj(assety, sortA, { data: (a) => a.utworzono ?? '', nazwa: (a) => a.opis || a.nazwa, tekst: (a) => `${a.nazwa} ${a.id}`, filtry: { tekstury: (a) => !!a.tekstury, rig: maRuchy, lokalne: (a) => !a.tekstury, wgrze: (a) => (a.wGrach?.length ?? 0) > 0, poza: (a) => a.stan === 'gotowe' && !(a.wGrach?.length), trwa: (a) => a.stan === 'trwa', blad: (a) => a.stan === 'blad' } });
     const [zadania, setZadania] = useState<ZadanieAssetu[]>([]);
     const [biezace, setBiezace] = useState<ZadanieAssetu | null>(null);
     const [gry, setGry] = useState<ProjektGry[]>([]);
@@ -392,9 +397,10 @@ export default function Assety3D() {
                 </aside>
 
                 <section className="min-w-0">
+                    <PasekSortowania s={sortA} zmien={zmienSortA} ile={assetyWidoczne.length} razem={assety.length} filtry={{ tekstury: '☁️ z teksturami (Meshy)', rig: '🦴 z rigiem / ruchami', lokalne: '🖥️ lokalne (TRELLIS)', wgrze: '🎮 w grze', poza: '📥 jeszcze nie w grze', trwa: '⏳ liczy się', blad: '⚠ błąd' }} />
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                         {assety.length === 0 && zadania.length === 0 && <p className="col-span-full rounded-xl border border-slate-800 bg-tgs-panel/60 p-6 text-center text-sm text-slate-500">Biblioteka pusta. Opisz pierwszy asset albo wrzuć zdjęcie.</p>}
-                        {assety.map((a) => (
+                        {assetyWidoczne.map((a) => (
                             <div key={a.id} onClick={() => setWybrany(a)} className={`cursor-pointer space-y-1 rounded-xl border p-2 ${wybrany?.id === a.id ? 'border-tgs-primary/50 bg-slate-800' : 'border-slate-800 bg-tgs-panel/60 hover:border-slate-600'}`}>
                                 <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-black/40">
                                     {a.stan === 'trwa' ? <Loader2 className="animate-spin text-slate-500" /> : <img src={adresPliku(a.id, 'obraz.png')} alt={a.nazwa} className="h-full w-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
@@ -403,9 +409,8 @@ export default function Assety3D() {
                                 <p className="line-clamp-2 text-[11px] text-slate-400">{a.opis}</p>
                                 <p className="font-mono text-[10px] text-slate-500">{a.zrodlo === 'tekst' ? <Wand2 size={10} className="mr-1 inline" /> : <ImageIcon size={10} className="mr-1 inline" />}{a.czasy?.razem ? `${a.czasy.razem} s` : ''}{a.czasy?.['3d'] ? ` (3D ${a.czasy['3d']} s)` : ''}{a.rozmiarGlb ? ` · ${(a.rozmiarGlb / 1e6).toFixed(1)} MB` : ''}{a.wGrach?.length ? ` · w: ${a.wGrach.join(', ')}` : ''}</p>
                                 {a.blad && <p className="text-[10px] text-rose-300">{a.blad}</p>}
+                                {a.stan === 'gotowe' && <div className="flex flex-col gap-1"><select defaultValue="" onClick={(e) => e.stopPropagation()} onChange={(e) => { if (e.target.value) { void dodajDoGry(a, e.target.value); e.target.value = ''; } }} className="min-w-0 flex-1 rounded-md border border-slate-700 bg-black/40 px-1 py-1 text-[11px]"><option value="">→ do gry…</option>{gry.map((g) => <option key={g.id} value={g.id}>{g.nazwa}</option>)}</select><select value={biomDoGry[a.id] ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => setBiomDoGry((b) => ({ ...b, [a.id]: e.target.value }))} title="Jako otoczenie: gra rozsieje tę bryłę po wybranym biomie wyspy (drzewa, trawy, skały, szczyty)" className="w-full rounded-md border border-slate-700 bg-black/40 px-1 py-0.5 text-[10px] text-slate-400"><option value="">🌲 nie jako otoczenie</option>{Object.entries(BIOMY_OTOCZENIA).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>}
                                 <div className="flex items-center gap-1">
-                                    {a.stan === 'gotowe' && <select defaultValue="" onClick={(e) => e.stopPropagation()} onChange={(e) => { if (e.target.value) { void dodajDoGry(a, e.target.value); e.target.value = ''; } }} className="min-w-0 flex-1 rounded-md border border-slate-700 bg-black/40 px-1 py-1 text-[11px]"><option value="">→ do gry…</option>{gry.map((g) => <option key={g.id} value={g.id}>{g.nazwa}</option>)}</select>}
-                                    {a.stan === 'gotowe' && <select value={biomDoGry[a.id] ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => setBiomDoGry((b) => ({ ...b, [a.id]: e.target.value }))} title="Jako otoczenie: gra rozsieje tę bryłę po wybranym biomie wyspy (drzewa, trawy, skały, szczyty)" className="w-16 rounded-md border border-slate-700 bg-black/40 px-0.5 py-1 text-[11px]"><option value="">🌲?</option>{Object.entries(BIOMY_OTOCZENIA).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void upiekszaj(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-fuchsia-300" title="✨ Upiększ lokalnie — ta sama bryła w 1024, więcej trójkątów (stara zostaje)"><Sparkles size={14} /></button>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void doStolu(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-amber-300" title="Na Stół — stado ulepszy bryłę (nowa wersja po ratyfikacji)"><Landmark size={14} /></button>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void wSkladnicy(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-sky-300" title="Do Składnicy Katedry (wspólne bryły)"><Package size={14} /></button>}
