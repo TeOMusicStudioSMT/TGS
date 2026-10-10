@@ -4,6 +4,8 @@
  * 🎥 Reżyser Wideo (Suweren 2026-10-10: „film stylu gry oraz postacie z gry w nim… wybór między Wan a FLUX”): silnik
  * FLUX → Wan (kadr FLUX.2 z obrazami obsady gry jako wzorami, ożywiony przez Wan 2.2), FLUX (ten kadr + ruch kamery,
  * szybko) albo Wan (sam tekst). Obsadę wybierasz albo zostawiasz Reżyserowi Wideo; kadr widać przy filmie.
+ * 🎞️🎵 (Suweren 2026-10-10: „trochę krótkie, 4 s… by potem Joanna zrobiła dźwięk”): 2–20 s jako kilka ujęć po ≤ 5 s,
+ * „🎵 dźwięk od Joanny” = po obrazie muzyka ACE-Step wpisana do mp4 (gra odtwarza ją z dźwiękiem).
  */
 import { useEffect, useState } from 'react';
 import { Clapperboard, Loader2, Plus, Trash2 } from 'lucide-react';
@@ -12,6 +14,13 @@ import { obsadaGry, zapiszGdd, zdarzeniaGry, zlecFilm, type CzlonekObsady, type 
 
 const SILNIKI: Record<string, string> = { 'flux-wan': '🎨→🎞️ FLUX → Wan', flux: '🎨 FLUX + kamera', wan: '🎞️ Wan (tekst)' };
 const RUCHY: Record<string, string> = { '': '🎥 ruch: Reżyser', najazd: 'najazd', odjazd: 'odjazd', 'w-lewo': 'panorama ←', 'w-prawo': 'panorama →', 'w-gore': 'w górę', staly: 'stoi' };
+/** 🎞️ Film 2–20 s; dłuższy niż 5 s = kilka ujęć (most: FilmyGry.ileUjec — zmieniasz jedno, zmień oba). */
+const SEKUNDY = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
+const ileUjec = (s: number) => Math.max(1, Math.ceil(s / 5));
+/** Uczciwa wskazówka czasu na tej karcie (6 GB): Wan ~12–40 min na ujęcie, FLUX ~1–3 min na kadr. */
+const czasLiczenia = (silnik: string, n: number) => silnik === 'flux'
+    ? `⏱ ok. ${n}–${3 * n} min (${n} kadr${n > 1 ? 'y' : ''} FLUX)`
+    : `⏱ ok. ${12 * n}–${40 * n} min (${n} ujęci${n > 1 ? 'a' : 'e'} Wan)`;
 
 export default function FilmyGry({ projekt, gdd, zmien, odswiez }: { projekt: string; gdd: Gdd; zmien: (z: Partial<Gdd>) => void; odswiez: () => Promise<void> }) {
     const [zdarzenia, setZdarzenia] = useState<Record<string, string>>({});
@@ -32,8 +41,11 @@ export default function FilmyGry({ projekt, gdd, zmien, odswiez }: { projekt: st
     const zlec = async (f: FilmGdd) => {
         if (!f.id) { setBlad('Najpierw zapisz GDD (nowy film dostaje id przy zapisie).'); return; }
         const s = f.silnik ?? 'flux-wan';
-        const ile = s === 'wan' ? 'Wan 2.2 z tekstu' : s === 'flux' ? 'kadr FLUX.2 z postaciami gry + ruch kamery (kilka minut)' : 'kadr FLUX.2 z postaciami gry → Wan 2.2 go ożywia';
-        if (!window.confirm(`🎬 Zlecić „${f.tytul}” (${f.sekundy} s)?\n\n${ile}.\nObsada: ${f.postacie?.length ? f.postacie.map((id) => obsada.find((o) => o.id === id)?.imie ?? id).join(', ') : 'wybierze Reżyser Wideo'}.\nLiczy się lokalnie w ComfyUI${s === 'flux' ? '' : ' — Wan na tej karcie nawet kilkadziesiąt minut'}; zajmuje GPU. GDD zapiszę przed zleceniem.`)) return;
+        const n = ileUjec(f.sekundy);
+        const ile = s === 'wan' ? 'Wan 2.2 z tekstu' : s === 'flux' ? 'kadr FLUX.2 z postaciami gry + ruch kamery' : 'kadr FLUX.2 z postaciami gry → Wan 2.2 go ożywia';
+        const ujecia = n > 1 ? ` — ${n} ujęcia${s === 'flux' ? ' (każde z własnym kadrem i ruchem kamery, z przenikaniem)' : ' (każde następne Wan od ostatniej klatki poprzedniego)'}` : '';
+        const dzwiek = f.dzwiek ? '\n🎵 Potem Joanna skomponuje muzykę pod długość filmu (ACE-Step, kilka minut).' : '';
+        if (!window.confirm(`🎬 Zlecić „${f.tytul}” (${f.sekundy} s)?\n\n${ile}${ujecia}.\n${czasLiczenia(s, n)}.${dzwiek}\nObsada: ${f.postacie?.length ? f.postacie.map((id) => obsada.find((o) => o.id === id)?.imie ?? id).join(', ') : 'wybierze Reżyser Wideo'}.\nLiczy się lokalnie w ComfyUI; zajmuje GPU. GDD zapiszę przed zleceniem.`)) return;
         setBlad(null);
         try { await zapiszGdd(projekt, gdd); await zlecFilm(projekt, f.id); await odswiez(); } catch (e) { setBlad((e as Error).message); }
     };
@@ -49,19 +61,21 @@ export default function FilmyGry({ projekt, gdd, zmien, odswiez }: { projekt: st
                 <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Clapperboard size={12} /> Filmy gry · Reżyser Wideo</p>
                 <button onClick={dodaj} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-0.5 text-[11px] hover:border-tgs-primary/40"><Plus size={12} /> film</button>
             </div>
-            <p className="text-[10px] leading-snug text-slate-500">Reżyser Wideo zna styl wizualny z GDD, krainy i obsadę gry ({obsada.length} postaci z obrazami). Każdy film to jedno ujęcie 2–5 s bez dźwięku, przypięte do zdarzenia; gra odtwarza je sama (Esc — pomiń).</p>
+            <p className="text-[10px] leading-snug text-slate-500">Reżyser Wideo zna styl wizualny z GDD, krainy i obsadę gry ({obsada.length} postaci z obrazami). Film ma 2–20 s (dłuższy niż 5 s to kilka ujęć — Wan liczy każde nawet kilkadziesiąt minut), przypięty do zdarzenia; z „🎵 dźwięk od Joanny” po obrazie dochodzi muzyka; gra odtwarza je sama (Esc — pomiń).</p>
             {filmy.length === 0 && <p className="text-[11px] text-slate-500">Brak filmów. Poproś Reżysera: „zaproponuj intro i cutscenki do najważniejszych zdarzeń”.</p>}
             {filmy.map((f, i) => (
                 <div key={f.id || `nowy-${i}`} className="space-y-1 rounded-lg border border-slate-800 bg-black/20 p-2 text-[11px]">
                     <div className="flex flex-wrap items-center gap-2">
                         <input value={f.tytul} onChange={(e) => ustaw(i, { tytul: e.target.value })} className="min-w-0 flex-1 rounded border border-slate-700 bg-black/40 px-2 py-0.5 outline-none" />
                         <select value={f.zdarzenie} onChange={(e) => ustaw(i, { zdarzenie: e.target.value })} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{Object.entries(zdarzenia).map(([k, v]) => <option key={k} value={k} title={v}>{k}</option>)}</select>
-                        <select value={f.sekundy} onChange={(e) => ustaw(i, { sekundy: Number(e.target.value) })} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{[2, 3, 4, 5].map((s) => <option key={s} value={s}>{s} s</option>)}</select>
+                        <select value={f.sekundy} onChange={(e) => ustaw(i, { sekundy: Number(e.target.value) })} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{SEKUNDY.map((s) => <option key={s} value={s}>{s} s{ileUjec(s) > 1 ? ` · ${ileUjec(s)} ujęcia` : ''}</option>)}</select>
                         <span className="font-mono text-[10px] text-slate-400">{STAN[f.stan] ?? f.stan}</span>
                         <button onClick={() => zmien({ filmy: filmy.filter((x) => x !== f) })} title="Usuń z GDD (plik w grze zostaje)" className="text-slate-500 hover:text-red-400"><Trash2 size={12} /></button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                         <select value={f.silnik ?? 'flux-wan'} onChange={(e) => ustaw(i, { silnik: e.target.value as FilmGdd['silnik'] })} title="FLUX → Wan: kadr z postaciami gry ożywiony; FLUX: kadr + ruch kamery (szybko); Wan: z samego tekstu" className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{Object.entries(SILNIKI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                        <label title="Po gotowym obrazie Joanna pisze brief brzmienia, a ACE-Step komponuje muzykę pod długość filmu" className="flex items-center gap-1 text-[10px] text-slate-400"><input type="checkbox" checked={!!f.dzwiek} onChange={(e) => ustaw(i, { dzwiek: e.target.checked })} /> 🎵 dźwięk od Joanny</label>
+                        <span className="text-[10px] text-slate-500">{czasLiczenia(f.silnik ?? 'flux-wan', ileUjec(f.sekundy))}</span>
                         <select value={f.ruch ?? ''} onChange={(e) => ustaw(i, { ruch: (e.target.value || null) as FilmGdd['ruch'] })} disabled={f.silnik === 'wan'} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5 disabled:opacity-40">{Object.entries(RUCHY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>
                     {f.silnik !== 'wan' && obsada.length > 0 && (
@@ -78,7 +92,11 @@ export default function FilmyGry({ projekt, gdd, zmien, odswiez }: { projekt: st
                     {f.kadrPrompt && <p className="font-mono text-[10px] text-slate-500">kadr: {f.kadrPrompt}</p>}
                     {f.prompt && <p className="font-mono text-[10px] text-slate-500">ruch: {f.prompt}</p>}
                     {f.stan === 'blad' && f.blad && <p className="text-[10px] text-amber-300">⚠ {f.blad}</p>}
-                    {f.stan === 'gotowy' && f.plik && <video src={`${BRIDGE}/apki/${encodeURIComponent(projekt)}/${f.plik}`} controls muted className="max-h-40 rounded border border-slate-800" />}
+                    {f.postep && <p className="text-[10px] text-sky-300">⏳ {f.postep}</p>}
+                    {f.ujecia && f.ujecia.length > 1 && <p className="font-mono text-[10px] text-slate-500">ujęcia: {f.ujecia.map((u, k) => `${k + 1}. ${RUCHY[u.kamera] ?? u.kamera}`).join(' · ')}</p>}
+                    {f.maDzwiek && <p className="text-[10px] text-emerald-300">🎵 muzyka Joanny{f.muzykaBrief ? `: ${f.muzykaBrief}` : ''}</p>}
+                    {f.dzwiekBlad && <p className="text-[10px] text-amber-300">🎵 dźwięk nie wyszedł (film w grze jest niemy): {f.dzwiekBlad}</p>}
+                    {f.stan === 'gotowy' && f.plik && <video src={`${BRIDGE}/apki/${encodeURIComponent(projekt)}/${f.plik}?t=${encodeURIComponent(f.kiedy ?? '')}`} controls muted={!f.maDzwiek} className="max-h-40 rounded border border-slate-800" />}
                     <button onClick={() => void zlec(f)} disabled={f.stan === 'zlecony' || !f.opis.trim() || !f.id} title={f.id ? '' : 'Najpierw zapisz GDD'} className="flex items-center gap-1 rounded-lg border border-tgs-primary/50 px-2 py-0.5 text-[11px] text-tgs-primary disabled:opacity-40">{f.stan === 'zlecony' ? <Loader2 size={11} className="animate-spin" /> : <Clapperboard size={11} />} {f.stan === 'gotowy' ? 'Zleć ponownie' : `Zleć film (${SILNIKI[f.silnik ?? 'flux-wan']})`}</button>
                 </div>
             ))}

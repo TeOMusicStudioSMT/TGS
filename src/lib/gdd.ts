@@ -41,6 +41,10 @@ export interface FilmGdd {
     /** 🎥 Reżyser Wideo: silnik, obsada (id z /api/gdd/:id/obsada), ruch kamery, kadr FLUX i kto w nim zagrał. */
     silnik?: 'flux-wan' | 'flux' | 'wan'; postacie?: string[]; ruch?: 'najazd' | 'odjazd' | 'w-lewo' | 'w-prawo' | 'w-gore' | 'staly' | null;
     kadr?: string | null; kadrPrompt?: string | null; obsadaUzyta?: { id: string; imie: string }[]; silnikUzyty?: string | null;
+    /** plan ujęć Reżysera Wideo (film > 5 s = kilka ujęć), postęp liczenia */
+    ujecia?: { ruch: string | null; kamera: string }[]; postep?: string | null;
+    /** 🎵 dźwięk od Joanny: dzwiek = Suweren chce, maDzwiek = plik w grze ma muzykę */
+    dzwiek?: boolean; maDzwiek?: boolean; muzykaBrief?: string | null; dzwiekBlad?: string | null;
 }
 /** 🎭 Obsada gry dla Reżysera Wideo: postać Katedry, bohaterowie, obrazy Pracowni (postacie, Mini-TeOgochi, stwory). */
 export interface CzlonekObsady { id: string; imie: string; opis: string }
