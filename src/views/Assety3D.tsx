@@ -13,7 +13,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { zwolnijScene } from '../lib/zwolnijScene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, zestawAkcji, ZESTAWY_AKCJI, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, zestawAkcji, ZESTAWY_AKCJI, BIOMY_OTOCZENIA, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, przekolorujPiksele, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
@@ -251,7 +251,9 @@ export default function Assety3D() {
             setBiezace(await zadanieAssetu(w.zadanie)); setTekst(''); setNazwa(''); await odswiez();
         } catch (e) { setBlad((e as Error).message); } finally { setWysylam(false); if (plikRef.current) plikRef.current.value = ''; }
     };
-    const dodajDoGry = async (a: Asset3D, gra: string) => { try { await doGry(a.id, gra); await odswiez(); } catch (e) { setBlad((e as Error).message); } };
+    // 🌲 biom otoczenia na karcie (puste = zwykłe „Do gry”); z biomem gra rozsiewa bryłę po wyspie
+    const [biomDoGry, setBiomDoGry] = useState<Record<string, string>>({});
+    const dodajDoGry = async (a: Asset3D, gra: string) => { try { await doGry(a.id, gra, biomDoGry[a.id] ? { otoczenie: biomDoGry[a.id], wysokosc: /drzew|sosn|pień|pien/i.test(a.opis) ? 5 : /traw|trzcin|kwiat|paproć|krzew/i.test(a.opis) ? 0.8 : /skał|głaz|kamie/i.test(a.opis) ? 1.6 : /szczyt|gór/i.test(a.opis) ? 14 : 3 } : {}); setInfo(biomDoGry[a.id] ? `🌲 „${a.nazwa}” w grze jako otoczenie (${BIOMY_OTOCZENIA[biomDoGry[a.id]]}) — gra rozsieje ją po biomie` : null); await odswiez(); } catch (e) { setBlad((e as Error).message); } };
     // 🏛️ Na Stół: stado (Pionek, Paleta, Kodeks) ocenia bryłę i pisze lepszy opis; po ratyfikacji powstaje nowa wersja.
     const doStolu = async (a: Asset3D) => {
         const uwagi = window.prompt(`Co poprawić w „${a.nazwa}”? (puste = niech stado oceni samo)`, '');
@@ -403,6 +405,7 @@ export default function Assety3D() {
                                 {a.blad && <p className="text-[10px] text-rose-300">{a.blad}</p>}
                                 <div className="flex items-center gap-1">
                                     {a.stan === 'gotowe' && <select defaultValue="" onClick={(e) => e.stopPropagation()} onChange={(e) => { if (e.target.value) { void dodajDoGry(a, e.target.value); e.target.value = ''; } }} className="min-w-0 flex-1 rounded-md border border-slate-700 bg-black/40 px-1 py-1 text-[11px]"><option value="">→ do gry…</option>{gry.map((g) => <option key={g.id} value={g.id}>{g.nazwa}</option>)}</select>}
+                                    {a.stan === 'gotowe' && <select value={biomDoGry[a.id] ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => setBiomDoGry((b) => ({ ...b, [a.id]: e.target.value }))} title="Jako otoczenie: gra rozsieje tę bryłę po wybranym biomie wyspy (drzewa, trawy, skały, szczyty)" className="w-16 rounded-md border border-slate-700 bg-black/40 px-0.5 py-1 text-[11px]"><option value="">🌲?</option>{Object.entries(BIOMY_OTOCZENIA).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void upiekszaj(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-fuchsia-300" title="✨ Upiększ lokalnie — ta sama bryła w 1024, więcej trójkątów (stara zostaje)"><Sparkles size={14} /></button>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void doStolu(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-amber-300" title="Na Stół — stado ulepszy bryłę (nowa wersja po ratyfikacji)"><Landmark size={14} /></button>}
                                     {a.stan === 'gotowe' && <button onClick={(e) => { e.stopPropagation(); void wSkladnicy(a); }} className="rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-sky-300" title="Do Składnicy Katedry (wspólne bryły)"><Package size={14} /></button>}

@@ -42,7 +42,9 @@ export const generujZeZdjecia = (plik: File, p: { nazwa?: string; opis?: string;
     for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== null && v !== '') fd.append(k, String(v));
     return api<{ zadanie: string; asset: string }>('/api/assety3d/generuj', { method: 'POST', body: fd });
 };
-export const doGry = (id: string, projekt: string) => api<{ plik: string }>(`/api/assety3d/${encodeURIComponent(id)}/do-gry`, { method: 'POST', body: JSON.stringify({ projekt }) });
+/** „Do gry”; z `otoczenie` (biom) gra rozsiewa bryłę po wyspie jako roślinność/skałę (src/otoczenie.ts gry). */
+export const doGry = (id: string, projekt: string, o: { otoczenie?: string | null; wysokosc?: number } = {}) => api<{ plik: string }>(`/api/assety3d/${encodeURIComponent(id)}/do-gry`, { method: 'POST', body: JSON.stringify({ projekt, ...o }) });
+export const BIOMY_OTOCZENIA: Record<string, string> = { gaj: '🌳 gaj', rownina: '🌾 równina', grzbiet: '⛰️ grzbiet', strumien: '💧 strumień', pustka: '🌑 pustka' };
 export const usunAsset = (id: string) => api<{ usunieto: boolean }>(`/api/assety3d/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const adresPliku = (id: string, plik: 'model.glb' | 'obraz.png', t = 0) => `${BRIDGE}/api/assety3d/${encodeURIComponent(id)}/plik/${plik}${t ? `?t=${t}` : ''}`;
 /** 🏛️ Bryła na Stół — stado ulepsza opis, po ratyfikacji Zlecenia Stada liczą NOWĄ wersję (linia OBIEKT:). */

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ImageIcon, Loader2, RefreshCw, Trash2, Wand2, Box, Mountain, Crop, X } from 'lucide-react';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresObrazu, brylaZObrazu, brakujaceGalezie, galezieProjektu, nowePropozycje, uzupelnijGalezie, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
+import { adresObrazu, brylaZObrazu, brakujaceGalezie, elementyKrainy, galezieProjektu, nowePropozycje, uzupelnijGalezie, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
 
 /** Zaznaczanie wycinka myszą na obrazie — ułamki 0–1 względem obrazu. */
 export function ZaznaczWycinek({ src, wycinek, onZmiana }: { src: string; wycinek: Wycinek | null; onZmiana: (w: Wycinek | null) => void }) {
@@ -72,6 +72,7 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
     }, [doWskazania, lista]);
     const [brakujace, setBrakujace] = useState<Array<{ id: string; nazwa: string; opis: string }>>([]);
     const [mysli, setMysli] = useState<string | null>(null);
+    const [elementy, setElementy] = useState<string | null>(null);
     const wczytajGalezie = useCallback(async () => {
         if (!wybranaGra) { setGalezie([]); setBrakujace([]); return; }
         try { const g = await galezieProjektu(wybranaGra); setGalezie(g); setGalaz((obecna) => obecna || (krajobraz ? g.find((x) => x.id === 'krainy')?.id ?? '' : '')); } catch { setGalezie([]); }
@@ -202,6 +203,13 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
                                         {wycinek && <button onClick={() => setWycinek(null)} className="ml-auto rounded p-0.5 hover:text-rose-300" title="Wyczyść"><X size={12} /></button>}
                                     </p>
                                     <button onClick={() => void doBryly(wybrany)} disabled={!wybrany.do3d && !wycinek} className="flex w-full items-center justify-center gap-1 rounded-lg border border-tgs-primary/50 py-2 text-sm text-tgs-primary hover:bg-tgs-primary/10 disabled:opacity-40"><Box size={14} /> Do 3D</button>
+                                </div>
+                            )}
+                            {krajobraz && wybranaGra && (
+                                <div className="space-y-1">
+                                    <button onClick={() => void (async () => { setBlad(null); setMysli('elementy'); try { const p = await elementyKrainy(wybranaGra, wybrany.id); setElementy(`🌲 ${p.length} elementów tej krainy w gałęzi „Otoczenie i roślinność” (zakładka Obrazy): ${p.map((x) => x.opis.split(/[,—:]/)[0]).join(' · ')}`); await wczytajGalezie(); } catch (e) { setBlad((e as Error).message); } finally { setMysli(null); } })()} disabled={!!mysli} title="Reżyser czyta ten koncept i proponuje drzewa, krzewy, trawy, skały i szczyty, które tu rosną — do narysowania, bryły i „Do gry” jako otoczenie" className="flex w-full items-center justify-center gap-1 rounded-lg border border-emerald-500/50 py-2 text-sm text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40">{mysli === 'elementy' ? <Loader2 size={14} className="animate-spin" /> : '🌲'} Elementy tej krainy</button>
+                                    {elementy && <p className="text-[10px] leading-snug text-emerald-200/80">{elementy}</p>}
+                                    <p className="text-[10px] leading-snug text-slate-500">Droga: Obrazy → gałąź „Otoczenie i roślinność” → Narysuj → Do 3D → Assety 3D: „🌲” biom + „→ do gry” — gra rozsieje bryłę po wyspie.</p>
                                 </div>
                             )}
                             {wybrany.promptObrazu && <p className="text-[10px] leading-snug text-slate-500">prompt: {wybrany.promptObrazu}</p>}

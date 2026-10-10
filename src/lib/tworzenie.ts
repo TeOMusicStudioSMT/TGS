@@ -29,6 +29,8 @@ export interface Galaz { id: string; nazwa: string; opis: string; propozycje: Ar
 /** ✨ nowe propozycje gałęzi (model Reżysera) i 🐾 gałęzie scenariusza, których GDD jeszcze nie ma (np. Mini-TeOgochi). */
 export const nowePropozycje = (projekt: string, galaz: string) => post<{ propozycje: Galaz['propozycje'] }>(`/api/gdd/${encodeURIComponent(projekt)}/galezie/${encodeURIComponent(galaz)}/propozycje`).then((d) => d.propozycje);
 export const brakujaceGalezie = (projekt: string) => api<{ galezie: Array<{ id: string; nazwa: string; opis: string }> }>(`/api/gdd/${encodeURIComponent(projekt)}/galezie/brakujace`).then((d) => d.galezie);
+/** 🌲 elementy otoczenia z konceptu krainy → propozycje w gałęzi „Otoczenie i roślinność”. */
+export const elementyKrainy = (projekt: string, obraz: string) => post<{ propozycje: Galaz['propozycje'] }>(`/api/gdd/${encodeURIComponent(projekt)}/krajobraz/${encodeURIComponent(obraz)}/elementy`).then((d) => d.propozycje);
 export const uzupelnijGalezie = (projekt: string) => post<{ dodane: string[] }>(`/api/gdd/${encodeURIComponent(projekt)}/galezie/uzupelnij`).then((d) => d.dodane);
 export const galezieProjektu = (projekt: string) => api<{ gdd: { galezie?: Galaz[] } | null }>(`/api/gdd/${encodeURIComponent(projekt)}`).then((d) => d.gdd?.galezie ?? []);
 
