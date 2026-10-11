@@ -69,7 +69,8 @@ export const importujPlik = (id: string, plik: File, silnik: string, model?: str
     return api<{ gdd: Gdd }>(`${p(id)}/import`, { method: 'POST', body: fd }).then((d) => d.gdd);
 };
 export const planGdd = (id: string, odNowa = false, model?: string) => api<{ gdd: Gdd }>(`${p(id)}/plan`, { method: 'POST', body: JSON.stringify({ odNowa, model }) }).then((d) => d.gdd);
-export const rozmowaGdd = (id: string, wypowiedz: string, historia: WpisRozmowy[], model?: string) => api<{ odpowiedz: string; propozycja: Propozycja | null; model: string }>(`${p(id)}/rozmowa`, { method: 'POST', body: JSON.stringify({ wypowiedz, historia, model }) });
+/** `zalaczniki` — klucze gotowych assetów gry (📎, ≤ 8): most dokłada Reżyserowi fakty o nich. */
+export const rozmowaGdd = (id: string, wypowiedz: string, historia: WpisRozmowy[], model?: string, zalaczniki: string[] = []) => api<{ odpowiedz: string; propozycja: Propozycja | null; model: string; zalaczniki?: Array<{ klucz: string; nazwa: string }> }>(`${p(id)}/rozmowa`, { method: 'POST', body: JSON.stringify({ wypowiedz, historia, model, zalaczniki }) });
 /** `zapasowe` — modele, które próbują zadania, na którym główny padł (najwyżej 3; ten, który zrobi, prowadzi dalej). */
 /** `chmuraPoChmurze` (domyślnie tak): główny z chmury padnie → najpierw inna chmura (wybrana albo auto: inny dostawca), lokalne na końcu. */
 export const realizujGdd = (id: string, kamien?: string, model?: string, zapasowe: string[] = [], chmuraPoChmurze = true) => api<{ start: boolean; zadan: number; model: string; zapasowe: string[] }>(`${p(id)}/realizuj`, { method: 'POST', body: JSON.stringify({ kamien, model, zapasowe, chmuraPoChmurze }) });

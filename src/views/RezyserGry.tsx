@@ -12,7 +12,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clapperboard, FileUp, Loader2, ListChecks, Play, RefreshCw, Save, Send, Square, Cpu, Check } from 'lucide-react';
 import { gry as pobierzGry, silniki as pobierzModele, type ProjektGry, type Silnik } from '../lib/kodeks';
 import { naGielde, szablony as pobierzSzablony, zasiejSzablon, type Szablon } from '../lib/tworzenie';
-import { SEKCJE, dobierzKlockiGdd, krokiKodeksa, type KrokKodeksa, importujPlik, importujTekst, klockiGdd, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, ustawZadanieGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type StanKlockowZadania, type WpisRozmowy } from '../lib/gdd';
+import { WyborZalacznikow, ChipyZalacznikow } from './ZalacznikiRezysera';
+import { type KlocekKatalogu, SEKCJE, dobierzKlockiGdd, krokiKodeksa, type KrokKodeksa, importujPlik, importujTekst, klockiGdd, planGdd, produkcjaGdd, przerwijGdd, realizujGdd, rozmowaGdd, silnikiGdd, ustawZadanieGdd, wczytajGdd, zapiszGdd, type Gdd, type Produkcja, type Propozycja, type Sekcja, type SilnikGry, type StanKlockowZadania, type WpisRozmowy } from '../lib/gdd';
 import FilmyGry from './FilmyGry';
 import BohaterowieGry from './BohaterowieGry';
 import PostacKatedry from './PostacKatedry';
@@ -54,6 +55,7 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
     const [tekstImportu, setTekstImportu] = useState('');
     const [pokazImport, setPokazImport] = useState(false);
     const [wypowiedz, setWypowiedz] = useState('');
+    const [zalaczniki, setZalaczniki] = useState<KlocekKatalogu[]>([]);   // 📎 gotowe assety gry do następnej wiadomości
     const [rozmowa, setRozmowa] = useState<WpisRozmowy[]>([]);
     const [propozycja, setPropozycja] = useState<Propozycja | null>(null);
     const plikRef = useRef<HTMLInputElement>(null);
@@ -149,10 +151,12 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
     const powiedz = async () => {
         if (!wybrany || !wypowiedz.trim() || praca) return;
         const tresc = wypowiedz.trim(); setWypowiedz(''); setPraca('rozmowa'); setBlad(null); setPropozycja(null);
-        const historia = [...rozmowa, { kiedy: new Date().toISOString(), kto: 'suweren' as const, tresc }];
+        const zal = zalaczniki; setZalaczniki([]);
+        const historia = [...rozmowa, { kiedy: new Date().toISOString(), kto: 'suweren' as const, tresc: zal.length ? `${tresc}
+📎 ${zal.map((x) => x.nazwa.slice(0, 60)).join(' · ')}` : tresc }];
         setRozmowa(historia);
         try {
-            const r = await rozmowaGdd(wybrany, tresc, rozmowa, model || undefined);
+            const r = await rozmowaGdd(wybrany, tresc, rozmowa, model || undefined, zal.map((x) => x.klucz));
             setRozmowa([...historia, { kiedy: new Date().toISOString(), kto: 'rezyser', tresc: r.odpowiedz }]);
             // ⚠️ Dawniej tylko sekcje/tytuł — propozycja z samymi KAMIENIAMI (plan) była po cichu wyrzucana (Suweren 2026-10-08:
             // „nie widzę tych zmian na panelu… realizuj plan wciąż 0”), a „Wpisz do GDD” kamieni i tak nie przenosiło.
@@ -408,7 +412,9 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                             </div>
                         )}
                     </div>
+                    <ChipyZalacznikow wybrane={zalaczniki} zmien={setZalaczniki} />
                     <div className="flex gap-2 border-t border-slate-800 p-2">
+                        <WyborZalacznikow projekt={wybrany} wybrane={zalaczniki} zmien={setZalaczniki} wylaczony={!gdd || praca === 'rozmowa'} />
                         <textarea value={wypowiedz} onChange={(e) => setWypowiedz(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void powiedz(); } }} disabled={!gdd || praca === 'rozmowa'} rows={2} placeholder="Powiedz Reżyserowi…" className="min-w-0 flex-1 resize-none rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-xs outline-none focus:border-tgs-primary/60 disabled:opacity-50" />
                         <button onClick={() => void powiedz()} disabled={!gdd || !wypowiedz.trim() || !!praca} className="rounded-lg bg-tgs-primary/80 px-3 text-black hover:bg-tgs-primary disabled:opacity-40"><Send size={16} /></button>
                     </div>
