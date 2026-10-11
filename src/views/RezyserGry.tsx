@@ -377,9 +377,10 @@ export default function RezyserGry({ wybranaGra = '', onGra, onPrzejdz }: { wybr
                 </section>
 
                 {/* REŻYSER GRY */}
-                <aside className="flex min-h-[60vh] flex-col rounded-xl border border-slate-800 bg-tgs-panel/60">
+                {/* rozmowa rośnie do treści (pole wpisu tuż pod ostatnią wiadomością), przyklejona przy przewijaniu GDD — Suweren 2026-10-11 */}
+                <aside className="flex max-h-[calc(100vh-1.5rem)] flex-col self-start rounded-xl border border-slate-800 bg-tgs-panel/60 lg:sticky lg:top-3">
                     <p className="flex items-center gap-1.5 border-b border-slate-800 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-slate-500"><Clapperboard size={12} /> Reżyser Gry</p>
-                    <div ref={rozmowaRef} className="flex-1 space-y-2 overflow-y-auto p-3 text-[12px]">
+                    <div ref={rozmowaRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 text-[12px]">
                         {!gdd ? <p className="text-slate-500">Wybierz grę, żeby porozmawiać o jej GDD.</p>
                             : rozmowa.length === 0 ? <p className="text-slate-500">Reżyser zna GDD tej gry. Zapytaj o mechanikę, poproś o przepisanie sekcji albo o ocenę planu — gdy zaproponuje zmianę, pojawi się przycisk „Wpisz do GDD".</p>
                                 : <>
