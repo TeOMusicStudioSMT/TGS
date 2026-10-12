@@ -13,7 +13,7 @@
  * Bez mostu Forge i Agenci nic nie zrobią i mówią to wprost.
  */
 import { useEffect, useState } from 'react';
-import { Gamepad2, Hammer, Bot, Sparkles, Wrench, Clapperboard, Box, Music2, Image as ImageIcon, Film, Mountain } from 'lucide-react';
+import { Gamepad2, Hammer, Bot, Sparkles, Wrench, Clapperboard, Box, Music2, Image as ImageIcon, Film, Mountain, PawPrint } from 'lucide-react';
 import HubGier from './views/HubGier';
 import Forge from './views/Forge';
 import Agenci from './views/Agenci';
@@ -21,13 +21,14 @@ import Gra from './views/Gra';
 import KodeksGra from './views/KodeksGra';
 import RezyserGry from './views/RezyserGry';
 import Assety3D from './views/Assety3D';
+import Bestiariusz from './views/Bestiariusz';
 import DyrygentGry from './views/DyrygentGry';
 import PracowniaObrazow from './views/PracowniaObrazow';
 import RuchBryl from './views/RuchBryl';
 import { mostZyje } from './lib/bridge';
 import { misjaZAdresu, nasluchujMisji, type MisjaTGS } from './lib/teleport';
 
-type Widok = 'hub' | 'gra' | 'gdd' | 'dyrygent' | 'obrazy' | 'assety' | 'ruch' | 'krajobrazy' | 'kodeks' | 'forge' | 'agenci';
+type Widok = 'hub' | 'gra' | 'gdd' | 'dyrygent' | 'obrazy' | 'assety' | 'ruch' | 'krajobrazy' | 'bestiariusz' | 'kodeks' | 'forge' | 'agenci';
 
 /**
  * WORKFLOW (Suweren 2026-10-06: „galeria niech zostanie na początku… zaczyna się TGS… zbudowana z Reżyserem, potem
@@ -48,6 +49,8 @@ const MENU: { id: Widok; nazwa: string; krok?: number; Ikona: typeof Gamepad2 }[
   // 🎞️ Ruch brył (Blender, etap 1): obrót, lewitacja, kołysanie, oddech, podskok → GLB z animacją
   { id: 'ruch', nazwa: 'Ruch', krok: 6, Ikona: Film },
   { id: 'krajobrazy', nazwa: 'Krajobrazy', krok: 7, Ikona: Mountain },
+  // 🐾 Bestiariusz Mini (2026-10-12): rzadkości, skille, dropy, warianty → public/bestiariusz.json gry
+  { id: 'bestiariusz', nazwa: 'Bestiariusz', Ikona: PawPrint },
   // 🎮 Kodeks buduje grę — three.js na moście, z panelem produkcyjnym Nocnej Zmiany (2026-09-21)
   { id: 'kodeks', nazwa: 'Kodeks buduje', krok: 8, Ikona: Wrench },
   { id: 'forge', nazwa: 'TeO Forge', Ikona: Hammer },
@@ -140,6 +143,7 @@ export default function App() {
         {widok === 'assety' && <Assety3D />}
         {widok === 'ruch' && <RuchBryl />}
         {widok === 'krajobrazy' && <PracowniaObrazow tryb="krajobraz" wybranaGra={gra} onGra={setGra} />}
+        {widok === 'bestiariusz' && <Bestiariusz wybranaGra={gra} />}
       </main>
     </div>
   );
