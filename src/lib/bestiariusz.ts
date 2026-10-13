@@ -25,6 +25,16 @@ async function api<T>(sciezka: string, init?: RequestInit): Promise<T> {
 export const wczytajBestiariusz = (projekt: string) => api<{ bestiariusz: Bestiariusz }>(`/api/bestiariusz/${encodeURIComponent(projekt)}`).then((d) => d.bestiariusz);
 export const zapiszBestiariusz = (projekt: string, b: Bestiariusz) => api<{ bestiariusz: Bestiariusz }>(`/api/bestiariusz/${encodeURIComponent(projekt)}`, { method: 'PUT', body: JSON.stringify({ bestiariusz: b }) }).then((d) => d.bestiariusz);
 
+/** 🕺 Rodzina wersji bryły z ruchami z riga (most: services/MiniZRuchem.js) — scalona wersja = najwięcej klipów. */
+export interface RodzinaZRuchem {
+    klucz: string; bryla: string; nazwa: string; opis: string; galaz: string | null; obraz: string | null; mini: boolean;
+    kategoria: 'tancerz' | 'wojownik' | 'gesty' | 'wedrowiec'; kategoriaNazwa: string; klipow: number; rodzaje: Record<string, number>;
+    klipy: string[]; wersji: number; wersjiZRuchem: number; klucze: string[]; utworzono: string | null; tekstury: boolean;
+}
+export const wczytajZRuchem = (projekt: string) => api<{ rodziny: RodzinaZRuchem[] }>(`/api/bestiariusz/${encodeURIComponent(projekt)}/z-ruchem`).then((d) => d.rodziny);
+/** Rodzina, do której należy klucz Mini (dowolna wersja: obraz, korzeń, poprawka, rig, plik w grze). */
+export const rodzinaMini = (rodziny: RodzinaZRuchem[], klucz: string | null) => (klucz ? rodziny.find((r) => r.klucze.includes(klucz)) ?? null : null);
+
 function wybierzWage<T>(lista: T[], waga: (x: T) => number, los: () => number): T | null {
     const suma = lista.reduce((s, x) => s + Math.max(0, waga(x)), 0);
     if (suma <= 0) return null;

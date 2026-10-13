@@ -4,9 +4,9 @@
  * Zapis: most → public/bestiariusz.json gry (gra czyta go sama; Reżyser i Kodeks o nim wiedzą).
  * Rzadkość niesie próg naładowania Jaja (uderzeń w rytm BPM) — „od rzadkości” z rozmowy z Reżyserem.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Dice5, Loader2, PawPrint, Plus, Save, Trash2, X } from 'lucide-react';
-import { DZIEDZINY, TYPY, losujWyklucie, wczytajBestiariusz, zapiszBestiariusz, type Bestiariusz as B, type Dziedzina, type MiniB, type Skill, type TypSkilla } from '../lib/bestiariusz';
+import { DZIEDZINY, TYPY, losujWyklucie, wczytajBestiariusz, zapiszBestiariusz, wczytajZRuchem, rodzinaMini, type RodzinaZRuchem, type Bestiariusz as B, type Dziedzina, type MiniB, type Skill, type TypSkilla } from '../lib/bestiariusz';
 import { klockiGdd, type KlocekKatalogu } from '../lib/gdd';
 import { adresObrazu } from '../lib/tworzenie';
 import { adresPliku } from '../lib/assety3d';
@@ -24,12 +24,15 @@ export default function Bestiariusz({ wybranaGra }: { wybranaGra: string | null 
     const [otwarty, setOtwarty] = useState<string | null>(null);
     const [wybor, setWybor] = useState(false);
     const [losowania, setLosowania] = useState<ReturnType<typeof losujWyklucie>[]>([]);
+    const [rodziny, setRodziny] = useState<RodzinaZRuchem[] | null>(null);
+    const [tylkoMini, setTylkoMini] = useState(true);
 
     const wczytaj = useCallback(async () => {
         if (!wybranaGra) return;
         setBlad(null);
         try { setB(await wczytajBestiariusz(wybranaGra)); setBrudne(false); } catch (e) { setBlad((e as Error).message); }
         klockiGdd(wybranaGra).then((d) => setKatalog(d.katalog)).catch(() => setKatalog([]));
+        wczytajZRuchem(wybranaGra).then(setRodziny).catch(() => setRodziny([]));
     }, [wybranaGra]);
     useEffect(() => { void wczytaj(); }, [wczytaj]);
 
@@ -38,7 +41,15 @@ export default function Bestiariusz({ wybranaGra }: { wybranaGra: string | null 
     const zmienSkill = (id: string, z: Partial<Skill>) => zmien((x) => ({ ...x, skille: x.skille.map((s) => (s.id === id ? { ...s, ...z } : s)) }));
     const zapisz = async () => { if (!b || !wybranaGra) return; setPraca('zapis'); setBlad(null); try { setB(await zapiszBestiariusz(wybranaGra, b)); setBrudne(false); } catch (e) { setBlad((e as Error).message); } finally { setPraca(null); } };
 
-    const kandydaci = useMemo(() => katalog.filter((k) => (k.galaz === 'mini-teogochi' || /mini[- ]?teogochi/i.test(k.nazwa)) && !b?.mini.some((m) => m.klucz === k.klucz)), [katalog, b]);
+    // 🕺 tylko Mini z ruchem (rodziny wersji z rigiem), których jeszcze nie ma w Bestiariuszu — kolejność z mostu (kategoria, klipy)
+    const kandydaci = useMemo(() => (rodziny ?? []).filter((r) => (!tylkoMini || r.mini) && !b?.mini.some((m) => r.klucze.includes(m.klucz ?? ''))), [rodziny, b, tylkoMini]);
+    // 🔗 Mini wskazujące starszą wersję rodziny (obraz, bryłę przed rigiem, plik gry bez ruchów) → scalona wersja z ruchami
+    const doScalenia = useMemo(() => (b?.mini ?? []).filter((m) => { const r = rodzinaMini(rodziny ?? [], m.klucz); return r && r.klucz !== m.klucz; }), [b, rodziny]);
+    const KOLEJ = { tancerz: 0, wojownik: 1, gesty: 2, wedrowiec: 3 } as const;
+    const miniPosortowane = useMemo(() => [...(b?.mini ?? [])].sort((x, y) => {
+        const rx = rodzinaMini(rodziny ?? [], x.klucz), ry = rodzinaMini(rodziny ?? [], y.klucz);
+        return (rx ? KOLEJ[rx.kategoria] : 9) - (ry ? KOLEJ[ry.kategoria] : 9) || (ry?.klipow ?? 0) - (rx?.klipow ?? 0) || x.nazwa.localeCompare(y.nazwa, 'pl');
+    }), [b, rodziny]);
     const sumaSzans = b?.rzadkosci.reduce((s, r) => s + r.szansa, 0) ?? 0;
     const rozklad = useMemo(() => { const l: Record<string, number> = {}; for (const w of losowania) if (w) l[w.rzadkosc.id] = (l[w.rzadkosc.id] ?? 0) + 1; return l; }, [losowania]);
 
@@ -92,32 +103,45 @@ export default function Bestiariusz({ wybranaGra }: { wybranaGra: string | null 
                     <div className="flex items-center justify-between">
                         <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">🐾 Biblioteka Mini ({b.mini.length})</p>
                         <div className="flex gap-1">
-                            <button onClick={() => setWybor((x) => !x)} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-0.5 text-[11px] hover:border-tgs-primary/50"><Plus size={12} /> z Pracowni ({kandydaci.length})</button>
+                            {doScalenia.length > 0 && <button onClick={() => zmien((x) => ({ ...x, mini: x.mini.map((m) => { const r = rodzinaMini(rodziny ?? [], m.klucz); return r && r.klucz !== m.klucz ? { ...m, klucz: r.klucz } : m; }) }))} title="Przepnij Mini na scaloną wersję z ruchami (najwięcej klipów w rodzinie wersji)" className="flex items-center gap-1 rounded-lg border border-amber-500/60 px-2 py-0.5 text-[11px] text-amber-200 hover:border-amber-300">🔗 Scal wersje ({doScalenia.length})</button>}
+                            <button onClick={() => setWybor((x) => !x)} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-0.5 text-[11px] hover:border-tgs-primary/50"><Plus size={12} /> 🕺 z ruchem ({rodziny === null ? '…' : kandydaci.length})</button>
                             <button onClick={() => { const id = noweId('mini'); zmien((x) => ({ ...x, mini: [...x.mini, { id, nazwa: 'Nowy Mini', klucz: null, rzadkosc: x.rzadkosci[0].id, dziedzina: 'takt', opis: '', skille: [], warianty: [], dropy: [] }] })); setOtwarty(id); }} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-0.5 text-[11px] hover:border-tgs-primary/50"><Plus size={12} /> pusty</button>
                         </div>
                     </div>
                     {wybor && (
-                        <div className="grid max-h-56 grid-cols-2 gap-1 overflow-y-auto rounded-lg border border-slate-800 p-1 sm:grid-cols-4">
-                            {!kandydaci.length && <p className="col-span-full p-2 text-[11px] text-slate-500">Wszystkie Mini z Pracowni są już w Bestiariuszu (gałąź „Mini-TeOgochi” w Obrazach).</p>}
-                            {kandydaci.map((k) => (
-                                <button key={k.klucz} title={k.opis} onClick={() => zmien((x) => ({ ...x, mini: [...x.mini, { id: noweId('mini'), nazwa: (k.nazwa.split(/[—:,.]/)[0] || k.nazwa).replace(/^mini-?teogochi\s*/i, '').trim().slice(0, 40) || 'Mini', klucz: k.klucz, rzadkosc: x.rzadkosci[0].id, dziedzina: 'takt', opis: k.opis.slice(0, 400), skille: [], warianty: [], dropy: [] }] }))}
-                                    className="flex flex-col items-center gap-1 rounded border border-slate-800 p-1 text-[10px] hover:border-tgs-primary/50">
-                                    {miniatura(k) ? <img src={miniatura(k)!} alt="" className="h-14 w-14 rounded object-cover" /> : <div className="h-14 w-14 rounded bg-slate-800" />}
-                                    <span className="line-clamp-2 text-center">{k.nazwa}</span>
-                                </button>
-                            ))}
+                        <div className="space-y-1 rounded-lg border border-slate-800 p-1">
+                            <label className="flex items-center gap-1 px-1 text-[10px] text-slate-400"><input type="checkbox" checked={tylkoMini} onChange={(e) => setTylkoMini(e.target.checked)} /> tylko Mini-TeOgochi (bez bohaterów i stworów świata)</label>
+                            <div className="grid max-h-72 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-4">
+                                {rodziny === null && <p className="col-span-full p-2 text-[11px] text-slate-500">Szukam brył z ruchami w Assetach 3D…</p>}
+                                {rodziny !== null && !kandydaci.length && <p className="col-span-full p-2 text-[11px] text-slate-500">Wszystkie Mini z ruchem są już w Bestiariuszu. Ruchy dodasz w Assety 3D → Meshy → rig i akcje.</p>}
+                                {kandydaci.map((r, i) => (
+                                    <Fragment key={r.klucz}>
+                                        {(i === 0 || kandydaci[i - 1].kategoria !== r.kategoria) && <p className="col-span-full px-1 pt-1 text-[10px] font-semibold text-slate-400">{r.kategoriaNazwa}</p>}
+                                        <button title={`${r.opis}
+
+Klipy: ${r.klipy.slice(0, 30).join(', ')}${r.klipy.length > 30 ? '…' : ''}`} onClick={() => zmien((x) => ({ ...x, mini: [...x.mini, { id: noweId('mini'), nazwa: r.nazwa, klucz: r.klucz, rzadkosc: x.rzadkosci[0].id, dziedzina: r.kategoria === 'wojownik' ? 'zwinnosc' : 'takt', opis: r.opis.slice(0, 400), skille: [], warianty: [], dropy: [] }] }))}
+                                            className="flex flex-col items-center gap-1 rounded border border-slate-800 p-1 text-[10px] hover:border-tgs-primary/50">
+                                            <img src={adresPliku(r.bryla, 'obraz.png')} alt="" className="h-14 w-14 rounded object-cover" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
+                                            <span className="line-clamp-2 text-center">{r.nazwa}</span>
+                                            <span className="text-slate-500">🕺 {r.klipow} klipów · {r.wersji} wers.</span>
+                                        </button>
+                                    </Fragment>
+                                ))}
+                            </div>
                         </div>
                     )}
                     {!b.mini.length && <p className="text-[11px] text-slate-500">Pusto. Dodaj stworki z Pracowni (Obrazy → gałąź Mini-TeOgochi) albo pustego Mini.</p>}
                     <div className="grid grid-cols-1 gap-2 2xl:grid-cols-2">
-                        {b.mini.map((m) => {
+                        {miniPosortowane.map((m) => {
                             const rz = b.rzadkosci.find((r) => r.id === m.rzadkosc);
                             const k = katalog.find((x) => x.klucz === m.klucz);
+                            const rodz = rodzinaMini(rodziny ?? [], m.klucz);
+                            const obrazek = miniatura(k) ?? (rodz ? adresPliku(rodz.bryla, 'obraz.png') : null);
                             const otw = otwarty === m.id;
                             return (
                                 <div key={m.id} className="rounded-lg border bg-black/20 p-2 text-[11px]" style={{ borderColor: `${rz?.kolor ?? '#334155'}88` }}>
                                     <div className="flex items-center gap-2">
-                                        {miniatura(k) ? <img src={miniatura(k)!} alt="" className="h-12 w-12 rounded object-cover" style={{ filter: m.warianty[0] && otw ? undefined : undefined }} /> : <div className="flex h-12 w-12 items-center justify-center rounded bg-slate-800">🥚</div>}
+                                        {obrazek ? <img src={obrazek} alt="" className="h-12 w-12 rounded object-cover" title={rodz ? `${rodz.kategoriaNazwa} · ${rodz.klipow} klipów ruchu` : undefined} /> : <div className="flex h-12 w-12 items-center justify-center rounded bg-slate-800">🥚</div>}
                                         <div className="min-w-0 flex-1">
                                             <input value={m.nazwa} onChange={(e) => zmienMini(m.id, { nazwa: e.target.value })} className={`${pole} w-full font-semibold`} />
                                             <div className="mt-1 grid grid-cols-2 gap-1">
@@ -130,7 +154,7 @@ export default function Bestiariusz({ wybranaGra }: { wybranaGra: string | null 
                                             <button onClick={() => zmien((x) => ({ ...x, mini: x.mini.filter((y) => y.id !== m.id) }))} title="Usuń z Bestiariusza (obraz/bryła zostają)" className="text-slate-500 hover:text-red-400"><Trash2 size={12} /></button>
                                         </div>
                                     </div>
-                                    <p className="mt-1 text-[10px] text-slate-500">{m.skille.length} skille · {m.warianty.length} warianty · {m.dropy.length} dropy{rz ? ` · Jajo: ${rz.progJaja} uderzeń · ×${rz.mnoznik}` : ''}</p>
+                                    <p className="mt-1 text-[10px] text-slate-500">{rodz ? <span className="text-tgs-primary">{rodz.kategoriaNazwa} · 🕺 {rodz.klipow} klipów{rodz.klucz !== m.klucz ? ' · ⚠ starsza wersja — 🔗 Scal' : ''} · </span> : <span className="text-amber-300/80">bez ruchów · </span>}{m.skille.length} skille · {m.warianty.length} warianty · {m.dropy.length} dropy{rz ? ` · Jajo: ${rz.progJaja} uderzeń · ×${rz.mnoznik}` : ''}</p>
                                     {otw && (
                                         <div className="mt-2 space-y-2 border-t border-slate-800 pt-2">
                                             <textarea value={m.opis} onChange={(e) => zmienMini(m.id, { opis: e.target.value })} rows={2} placeholder="opis stworka" className={`${pole} w-full resize-none`} />
