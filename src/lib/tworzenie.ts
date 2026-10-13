@@ -36,10 +36,12 @@ export const galezieProjektu = (projekt: string) => api<{ gdd: { galezie?: Galaz
 
 // ── Pracownia obrazów ──
 export interface StylInfo { nazwa: string; do3d: boolean; szer: number; wys: number; }
-export interface ObrazGry { id: string; opis: string; styl: StylObrazu; galaz: string | null; projekt: string | null; szer: number; wys: number; do3d: boolean; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; utworzono: string; czas?: number; promptObrazu?: string; bryly: string[]; }
+/** 🎨 Silnik obrazu Pracowni: FLUX (domyślny, zapas) albo Qwen-Image-Edit 2511 (most: Assety3D.SILNIKI_OBRAZU). */
+export type SilnikObrazu = 'flux' | 'qwen';
+export interface ObrazGry { id: string; opis: string; styl: StylObrazu; galaz: string | null; projekt: string | null; szer: number; wys: number; do3d: boolean; silnik?: SilnikObrazu; silnikUzyty?: SilnikObrazu; uwaga?: string; stan: 'trwa' | 'gotowe' | 'blad'; blad?: string; utworzono: string; czas?: number; promptObrazu?: string; bryly: string[]; }
 export interface ZadanieObrazu { id: string; obraz: string | null; stan: string; etap: string; blad?: string | null; }
-export const obrazy = () => api<{ obrazy: ObrazGry[]; style: Record<StylObrazu, StylInfo>; zadania: ZadanieObrazu[] }>('/api/assety3d/obrazy');
-export const narysuj = (p: { opis: string; styl: StylObrazu; galaz?: string | null; projekt?: string | null }) => post<{ zadanie: string; obraz: string }>('/api/assety3d/obrazy', p);
+export const obrazy = () => api<{ obrazy: ObrazGry[]; style: Record<StylObrazu, StylInfo>; silniki?: Record<SilnikObrazu, { nazwa: string }>; zadania: ZadanieObrazu[] }>('/api/assety3d/obrazy');
+export const narysuj = (p: { opis: string; styl: StylObrazu; galaz?: string | null; projekt?: string | null; silnik?: SilnikObrazu }) => post<{ zadanie: string; obraz: string }>('/api/assety3d/obrazy', p);
 export const usunObraz = (id: string) => api<{ usunieto: boolean }>(`/api/assety3d/obrazy/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const adresObrazu = (id: string) => `${BRIDGE}/api/assety3d/obrazy/${encodeURIComponent(id)}/plik`;
 export interface Wycinek { x: number; y: number; w: number; h: number; }

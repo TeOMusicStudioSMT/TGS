@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ImageIcon, Loader2, RefreshCw, Trash2, Wand2, Box, Mountain, Crop, X } from 'lucide-react';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
 import PasekSortowania, { posortuj, useSortowanie } from './PasekSortowania';
-import { adresObrazu, brylaZObrazu, brakujaceGalezie, elementyKrainy, galezieProjektu, nowePropozycje, uzupelnijGalezie, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
+import { adresObrazu, brylaZObrazu, brakujaceGalezie, elementyKrainy, galezieProjektu, nowePropozycje, uzupelnijGalezie, narysuj, obrazy as pobierzObrazy, usunObraz, type Galaz, type ObrazGry, type SilnikObrazu, type StylInfo, type StylObrazu, type Wycinek, type ZadanieObrazu } from '../lib/tworzenie';
 
 /** Zaznaczanie wycinka myszą na obrazie — ułamki 0–1 względem obrazu. */
 export function ZaznaczWycinek({ src, wycinek, onZmiana }: { src: string; wycinek: Wycinek | null; onZmiana: (w: Wycinek | null) => void }) {
@@ -42,6 +42,9 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
     const [zadania, setZadania] = useState<ZadanieObrazu[]>([]);
     const [opis, setOpis] = useState('');
     const [styl, setStyl] = useState<StylObrazu>(krajobraz ? 'krajobraz' : 'pojedynczy');
+    const [silniki, setSilniki] = useState<Record<string, { nazwa: string }>>({});
+    const [silnik, setSilnik] = useState<SilnikObrazu>(() => { try { return localStorage.getItem('tgs_silnik_obrazu') === 'qwen' ? 'qwen' : 'flux'; } catch { return 'flux'; } });
+    const zmienSilnik = (s: SilnikObrazu) => { setSilnik(s); try { localStorage.setItem('tgs_silnik_obrazu', s); } catch { /* bez pamięci */ } };
     const [wybrany, setWybrany] = useState<ObrazGry | null>(null);
     const [wycinek, setWycinek] = useState<Wycinek | null>(null);
     const [blad, setBlad] = useState<string | null>(null);
@@ -49,7 +52,7 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
     const [praca, setPraca] = useState(false);
 
     const odswiez = useCallback(async () => {
-        try { const d = await pobierzObrazy(); setLista(d.obrazy); setStyle(d.style); setZadania(d.zadania); setWybrany((w) => (w ? d.obrazy.find((o) => o.id === w.id) ?? null : w)); }
+        try { const d = await pobierzObrazy(); setLista(d.obrazy); setStyle(d.style); setSilniki(d.silniki ?? {}); setZadania(d.zadania); setWybrany((w) => (w ? d.obrazy.find((o) => o.id === w.id) ?? null : w)); }
         catch (e) { setBlad((e as Error).message); }
     }, []);
     useEffect(() => { void odswiez(); pobierzGry().then(setGry).catch(() => setGry([])); }, [odswiez]);
@@ -103,7 +106,7 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
 
     const rysuj = async () => {
         setBlad(null); setPraca(true);
-        try { await narysuj({ opis, styl, galaz: galaz || null, projekt: wybranaGra || null }); setOpis(''); await odswiez(); }
+        try { await narysuj({ opis, styl, galaz: galaz || null, projekt: wybranaGra || null, silnik }); setOpis(''); await odswiez(); }
         catch (e) { setBlad((e as Error).message); } finally { setPraca(false); }
     };
     const doBryly = async (o: ObrazGry) => {
@@ -174,6 +177,13 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
                                 </select>
                             </label>
                         )}
+                        {Object.keys(silniki).length > 1 && (
+                            <label className="block text-[10px] text-slate-500">Silnik
+                                <select value={silnik} onChange={(e) => zmienSilnik(e.target.value as SilnikObrazu)} className="mt-0.5 w-full rounded-lg border border-slate-700 bg-black/40 px-2 py-1 text-xs">
+                                    {Object.entries(silniki).map(([k, s]) => <option key={k} value={k}>{s.nazwa}</option>)}
+                                </select>
+                            </label>
+                        )}
                         <button onClick={() => void rysuj()} disabled={praca || trwa || opis.trim().length < 3} className="flex w-full items-center justify-center gap-1 rounded-lg bg-tgs-primary/80 py-2 text-sm font-semibold text-black hover:bg-tgs-primary disabled:opacity-40">{praca ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Narysuj</button>
                         <p className="text-[10px] leading-snug text-slate-500">Jedno zadanie GPU naraz (wspólna kolejka z bryłami 3D). ~1 min na 6 GB VRAM, gdy karta jest wolna.</p>
                     </div>
@@ -189,7 +199,7 @@ export default function PracowniaObrazow({ tryb = 'obrazy', wybranaGra, onGra }:
                                     {o.stan === 'trwa' ? <Loader2 className="animate-spin text-slate-500" /> : o.stan === 'blad' ? <p className="p-2 text-[10px] text-rose-300">{o.blad}</p> : <img src={adresObrazu(o.id)} alt={o.opis} className="h-full w-full object-contain" />}
                                 </div>
                                 <p className="line-clamp-2 text-[11px] text-slate-300">{o.opis}</p>
-                                <p className="flex items-center gap-1 font-mono text-[10px] text-slate-500">{style[o.styl]?.nazwa ?? o.styl}{o.galaz ? ` · ${galezie.find((g) => g.id === o.galaz)?.nazwa ?? o.galaz}` : ''}{o.czas ? ` · ${o.czas} s` : ''}{o.bryly?.length ? ` · brył: ${o.bryly.length}` : ''}
+                                <p className="flex items-center gap-1 font-mono text-[10px] text-slate-500">{style[o.styl]?.nazwa ?? o.styl}{o.galaz ? ` · ${galezie.find((g) => g.id === o.galaz)?.nazwa ?? o.galaz}` : ''}{o.silnikUzyty === 'qwen' ? ' · Qwen' : ''}{o.uwaga ? ' · ⚠ zapas FLUX' : ''}{o.czas ? ` · ${o.czas} s` : ''}{o.bryly?.length ? ` · brył: ${o.bryly.length}` : ''}
                                     <button onClick={(e) => { e.stopPropagation(); void usun(o); }} className="ml-auto rounded p-0.5 hover:text-rose-300" title="Usuń"><Trash2 size={12} /></button>
                                 </p>
                             </div>
