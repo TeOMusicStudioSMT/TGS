@@ -12,7 +12,7 @@ import { Clapperboard, Loader2, Plus, Trash2 } from 'lucide-react';
 import { BRIDGE } from '../lib/bridge';
 import { obsadaGry, zapiszGdd, zdarzeniaGry, zlecFilm, type CzlonekObsady, type FilmGdd, type Gdd } from '../lib/gdd';
 
-const SILNIKI: Record<string, string> = { 'flux-wan': '🎨→🎞️ FLUX → Wan', flux: '🎨 FLUX + kamera', wan: '🎞️ Wan (tekst)' };
+const SILNIKI: Record<string, string> = { flux: '🎨 FLUX + kamera (szybko)', 'flux-wan': '🎨→🎞️ FLUX → Wan (długo na 6 GB)', wan: '🎞️ Wan (tekst)' };
 const RUCHY: Record<string, string> = { '': '🎥 ruch: Reżyser', najazd: 'najazd', odjazd: 'odjazd', 'w-lewo': 'panorama ←', 'w-prawo': 'panorama →', 'w-gore': 'w górę', staly: 'stoi' };
 /** 🎞️ Film 2–20 s; dłuższy niż 5 s = kilka ujęć (most: FilmyGry.ileUjec — zmieniasz jedno, zmień oba). */
 const SEKUNDY = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
@@ -37,10 +37,10 @@ export default function FilmyGry({ projekt, gdd, zmien, odswiez }: { projekt: st
     }, [filmy, odswiez]);
 
     const ustaw = (i: number, pola: Partial<FilmGdd>) => zmien({ filmy: filmy.map((f, j) => (j === i ? { ...f, ...pola } : f)) });
-    const dodaj = () => zmien({ filmy: [...filmy, { id: '', zdarzenie: 'start', tytul: 'Nowy film', opis: '', sekundy: 4, stan: 'pomysl', plik: null, prompt: null, silnik: 'flux-wan', postacie: [] } as FilmGdd] });
+    const dodaj = () => zmien({ filmy: [...filmy, { id: '', zdarzenie: 'start', tytul: 'Nowy film', opis: '', sekundy: 4, stan: 'pomysl', plik: null, prompt: null, silnik: 'flux', postacie: [] } as FilmGdd] });
     const zlec = async (f: FilmGdd) => {
         if (!f.id) { setBlad('Najpierw zapisz GDD (nowy film dostaje id przy zapisie).'); return; }
-        const s = f.silnik ?? 'flux-wan';
+        const s = f.silnik ?? 'flux';
         const n = ileUjec(f.sekundy);
         const ile = s === 'wan' ? 'Wan 2.2 z tekstu' : s === 'flux' ? 'kadr FLUX.2 z postaciami gry + ruch kamery' : 'kadr FLUX.2 z postaciami gry → Wan 2.2 go ożywia';
         const ujecia = n > 1 ? ` — ${n} ujęcia${s === 'flux' ? ' (każde z własnym kadrem i ruchem kamery, z przenikaniem)' : ' (każde następne Wan od ostatniej klatki poprzedniego)'}` : '';
@@ -73,9 +73,9 @@ export default function FilmyGry({ projekt, gdd, zmien, odswiez }: { projekt: st
                         <button onClick={() => zmien({ filmy: filmy.filter((x) => x !== f) })} title="Usuń z GDD (plik w grze zostaje)" className="text-slate-500 hover:text-red-400"><Trash2 size={12} /></button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                        <select value={f.silnik ?? 'flux-wan'} onChange={(e) => ustaw(i, { silnik: e.target.value as FilmGdd['silnik'] })} title="FLUX → Wan: kadr z postaciami gry ożywiony; FLUX: kadr + ruch kamery (szybko); Wan: z samego tekstu" className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{Object.entries(SILNIKI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                        <select value={f.silnik ?? 'flux'} onChange={(e) => ustaw(i, { silnik: e.target.value as FilmGdd['silnik'] })} title="FLUX → Wan: kadr z postaciami gry ożywiony; FLUX: kadr + ruch kamery (szybko); Wan: z samego tekstu" className="rounded border border-slate-700 bg-black/40 px-1 py-0.5">{Object.entries(SILNIKI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                         <label title="Po gotowym obrazie Joanna pisze brief brzmienia, a ACE-Step komponuje muzykę pod długość filmu" className="flex items-center gap-1 text-[10px] text-slate-400"><input type="checkbox" checked={!!f.dzwiek} onChange={(e) => ustaw(i, { dzwiek: e.target.checked })} /> 🎵 dźwięk od Joanny</label>
-                        <span className="text-[10px] text-slate-500">{czasLiczenia(f.silnik ?? 'flux-wan', ileUjec(f.sekundy))}</span>
+                        <span className="text-[10px] text-slate-500">{czasLiczenia(f.silnik ?? 'flux', ileUjec(f.sekundy))}</span>
                         <select value={f.ruch ?? ''} onChange={(e) => ustaw(i, { ruch: (e.target.value || null) as FilmGdd['ruch'] })} disabled={f.silnik === 'wan'} className="rounded border border-slate-700 bg-black/40 px-1 py-0.5 disabled:opacity-40">{Object.entries(RUCHY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>
                     {f.silnik !== 'wan' && obsada.length > 0 && (
@@ -97,7 +97,7 @@ export default function FilmyGry({ projekt, gdd, zmien, odswiez }: { projekt: st
                     {f.maDzwiek && <p className="text-[10px] text-emerald-300">🎵 muzyka Joanny{f.muzykaBrief ? `: ${f.muzykaBrief}` : ''}</p>}
                     {f.dzwiekBlad && <p className="text-[10px] text-amber-300">🎵 dźwięk nie wyszedł (film w grze jest niemy): {f.dzwiekBlad}</p>}
                     {f.stan === 'gotowy' && f.plik && <video src={`${BRIDGE}/apki/${encodeURIComponent(projekt)}/${f.plik}?t=${encodeURIComponent(f.kiedy ?? '')}`} controls muted={!f.maDzwiek} className="max-h-40 rounded border border-slate-800" />}
-                    <button onClick={() => void zlec(f)} disabled={f.stan === 'zlecony' || !f.opis.trim() || !f.id} title={f.id ? '' : 'Najpierw zapisz GDD'} className="flex items-center gap-1 rounded-lg border border-tgs-primary/50 px-2 py-0.5 text-[11px] text-tgs-primary disabled:opacity-40">{f.stan === 'zlecony' ? <Loader2 size={11} className="animate-spin" /> : <Clapperboard size={11} />} {f.stan === 'gotowy' ? 'Zleć ponownie' : `Zleć film (${SILNIKI[f.silnik ?? 'flux-wan']})`}</button>
+                    <button onClick={() => void zlec(f)} disabled={f.stan === 'zlecony' || !f.opis.trim() || !f.id} title={f.id ? '' : 'Najpierw zapisz GDD'} className="flex items-center gap-1 rounded-lg border border-tgs-primary/50 px-2 py-0.5 text-[11px] text-tgs-primary disabled:opacity-40">{f.stan === 'zlecony' ? <Loader2 size={11} className="animate-spin" /> : <Clapperboard size={11} />} {f.stan === 'gotowy' ? 'Zleć ponownie' : `Zleć film (${SILNIKI[f.silnik ?? 'flux']})`}</button>
                 </div>
             ))}
             {blad && <p className="text-[10px] text-amber-300">⚠ {blad}</p>}
