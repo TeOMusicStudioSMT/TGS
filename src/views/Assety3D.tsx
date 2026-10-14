@@ -14,7 +14,7 @@ import { zwolnijScene } from '../lib/zwolnijScene';
 import PasekSortowania, { posortuj, useSortowanie } from './PasekSortowania';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gry as pobierzGry, type ProjektGry } from '../lib/kodeks';
-import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, zestawAkcji, ZESTAWY_AKCJI, BIOMY_OTOCZENIA, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
+import { adresPliku, doGry, doSkladnicy, naStol, upiekszLokalnie, generujZTekstu, generujZeZdjecia, listaAssetow, stanAssetow, usunAsset, zadanieAssetu, przekolorujBryle, zageszczFragment, zaswiec, sylwetkaBryly, stanChmury, wycenChmure, zlecChmure, zadanieChmury, opisPoprawki, akcjeMeshy, zestawAkcji, ZESTAWY_AKCJI, BIOMY_OTOCZENIA, type AkcjaMeshy, stylZeZdjecia, stylZOpisu, szukajPromocji, zwiadyPromocji, type ZwiadPromocji, type DostawcaPromocji, type WycenaChmury, type ZadanieChmury, type ZlecenieChmury, type Asset3D, type StanAssetow, type ZadanieAssetu } from '../lib/assety3d';
 import { KOLOR_ZERO, bezZmian, jasnoscSrgb, przekoloruj, przekolorujPiksele, wycinekNaPudelko, zHex, type Pudelko, type Sylwetka, type UstawieniaKoloru } from '../lib/kolorBryly';
 import type { Wycinek } from '../lib/tworzenie';
 import { ZaznaczWycinek } from './PracowniaObrazow';
@@ -205,8 +205,9 @@ export default function Assety3D() {
     const [zadanieCh, setZadanieCh] = useState<ZadanieChmury | null>(null);
     const [patrzy, setPatrzy] = useState(false);
     const [bladStylu, setBladStylu] = useState<string | null>(null);
-    // 🏷️ Zwiadowca: kody rabatowe Meshy (ostatni zwiad z mostu; nowe szukanie = wyszukiwanie w sieci przez API Claude, grosze)
+    // 🏷️ Zwiadowca: kody rabatowe Meshy (ostatni zwiad z mostu; nowe szukanie = wyszukiwanie w sieci przez Claude albo Gemini, grosze)
     const [promocje, setPromocje] = useState<ZwiadPromocji | null>(null);
+    const [dostawcaPromocji, setDostawcaPromocji] = useState<DostawcaPromocji>(() => { try { const v = localStorage.getItem('tgs_promocje_dostawca'); return v === 'anthropic' || v === 'gemini' ? v : 'auto'; } catch { return 'auto'; } });
     const [szukamPromocji, setSzukamPromocji] = useState(false);
     const [bladPromocji, setBladPromocji] = useState<string | null>(null);
     // Klucz bywa udostępniany mostowi w trakcie (Hub → Kibel) — sprawdzamy też po powrocie do okna, bez przeładowania strony.
@@ -329,7 +330,7 @@ export default function Assety3D() {
     };
     const szukajKodowMeshy = async () => {
         setSzukamPromocji(true); setBladPromocji(null);
-        try { setPromocje(await szukajPromocji('Meshy (meshy.ai, API do brył 3D)')); }
+        try { setPromocje(await szukajPromocji('Meshy (meshy.ai, API do brył 3D)', dostawcaPromocji)); }
         catch (e) { setBladPromocji(e instanceof Error ? e.message : String(e)); }
         finally { setSzukamPromocji(false); }
     };
@@ -539,15 +540,22 @@ export default function Assety3D() {
                             {zadanieCh?.stan === 'gotowe' && <p className="font-mono text-[10px] text-emerald-300">✓ gotowe → {zadanieCh.asset}{zadanieCh.ruchy?.length ? ` · ruchy: ${zadanieCh.ruchy.join(', ')} (zakładka 6 Ruch)` : ''} · {zadanieCh.kredyty} kr.{zadanieCh.uwagi?.length ? ` · ⚠ ${zadanieCh.uwagi.join('; ')}` : ''}</p>}
                             <p className="text-[10px] leading-snug text-slate-500">Bryła wychodzi z Katedry do Meshy dopiero po „Wyślij” i potwierdzeniu kwoty. Wynik ma tekstury i wraca jako nowa wersja obok starej.</p>
                             <div className="space-y-1 border-t border-slate-800 pt-1.5">
-                                <button onClick={() => void szukajKodowMeshy()} disabled={szukamPromocji} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] hover:border-amber-300 disabled:opacity-40">{szukamPromocji ? <Loader2 size={11} className="animate-spin" /> : '🏷️'} Zwiadowca: szukaj kodów Meshy</button>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <button onClick={() => void szukajKodowMeshy()} disabled={szukamPromocji} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] hover:border-amber-300 disabled:opacity-40">{szukamPromocji ? <Loader2 size={11} className="animate-spin" /> : '🏷️'} Zwiadowca: szukaj kodów Meshy</button>
+                                    <select value={dostawcaPromocji} title="Kto szuka w sieci (klucz z Kibla, „🔗 Udostępnij mostowi”)"
+                                        onChange={(e) => { const v = e.target.value as DostawcaPromocji; setDostawcaPromocji(v); try { localStorage.setItem('tgs_promocje_dostawca', v); } catch { /* bez pamięci */ } }}
+                                        className="rounded border border-slate-700 bg-black/40 px-1 py-0.5 text-[11px]">
+                                        <option value="auto">☁️ auto</option><option value="anthropic">Claude</option><option value="gemini">Gemini</option>
+                                    </select>
+                                </div>
                                 {bladPromocji && <p className="text-[10px] text-amber-300">⚠ {bladPromocji}</p>}
                                 {promocje && (<>
-                                    <p className="text-[10px] text-slate-500">{new Date(promocje.kiedy).toLocaleString('pl-PL')} · {promocje.koszt.wyszukan} wyszukań (≈ ${promocje.koszt.usdWyszukiwania} + tokeny){promocje.odrzucone.length ? ` · ${promocje.odrzucone.length} odrzucone bez źródła` : ''}</p>
+                                    <p className="text-[10px] text-slate-500">{new Date(promocje.kiedy).toLocaleString('pl-PL')} · {promocje.dostawca === 'gemini' ? 'Gemini' : 'Claude'} · {promocje.koszt.wyszukan} wyszukań{promocje.koszt.usdWyszukiwania != null ? ` (≈ $${promocje.koszt.usdWyszukiwania} + tokeny)` : ' (cennik Google Search)'}{promocje.odrzucone.length ? ` · ${promocje.odrzucone.length} odrzucone bez źródła` : ''}</p>
                                     {promocje.znalezione.length === 0 && <p className="text-[11px] text-slate-400">Nic ze źródłem. {promocje.podsumowanie}</p>}
                                     {promocje.znalezione.map((z, i) => (
                                         <div key={i} className="rounded-lg border border-slate-800 bg-black/30 px-2 py-1 text-[11px]">
                                             <p className="text-slate-200">{z.kod ? <code className="mr-1 rounded bg-amber-500/20 px-1 text-amber-200">{z.kod}</code> : null}{z.rabat ? <b className="mr-1 text-emerald-300">{z.rabat}</b> : null}{z.opis}</p>
-                                            <p className="text-[10px] text-slate-500">{z.pewnosc === 'oficjalne' ? '✅ oficjalne' : z.pewnosc === 'forum' ? '💬 forum' : '🧾 agregator'}{z.data || z.wiekStrony ? ` · ${z.data ?? z.wiekStrony}` : ''}{z.uwagi ? ` · ${z.uwagi}` : ''} · <a href={z.zrodlo} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline">{z.tytulZrodla ?? 'źródło'}</a></p>
+                                            <p className="text-[10px] text-slate-500">{z.pewnosc === 'oficjalne' ? '✅ oficjalne' : z.pewnosc === 'forum' ? '💬 forum' : '🧾 agregator'}{z.data || z.wiekStrony ? ` · ${z.data ?? z.wiekStrony}` : ''}{z.uwagi ? ` · ${z.uwagi}` : ''} · <a href={z.zrodlo} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline">{z.tytulZrodla ?? 'źródło'}</a>{z.potwierdzone === 'domena' ? ' · źródło potwierdzone domeną' : ''}</p>
                                         </div>
                                     ))}
                                     <p className="text-[10px] leading-snug text-slate-500">{promocje.uwaga}</p>

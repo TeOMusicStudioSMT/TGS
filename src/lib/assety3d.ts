@@ -78,10 +78,12 @@ export const stanChmury = () => api<{ maKlucz: boolean; usdZaKredyt: number; zad
 export const wycenChmure = (id: string, zlecenie: ZlecenieChmury) => api<WycenaChmury>(`/api/assety3d/chmura/${encodeURIComponent(id)}/wycena`, { method: 'POST', body: JSON.stringify({ zlecenie }) });
 export const zlecChmure = (id: string, zlecenie: ZlecenieChmury, zgodaKredyty: number) => api<{ zadanie: ZadanieChmury }>(`/api/assety3d/chmura/${encodeURIComponent(id)}/zlec`, { method: 'POST', body: JSON.stringify({ zlecenie, zgodaKredyty }) }).then((d) => d.zadanie);
 // 🏷️ Zwiadowca promocji (most: services/ZwiadowcaPromocji.js) — kody i promocje ze źródłami z wyszukiwania; nic nie wpisuje, nie płaci.
-export interface ZnaleziskoPromocji { rodzaj: 'kod' | 'promocja' | 'program' | 'partnerska'; kod: string | null; opis: string; rabat: string | null; zrodlo: string; tytulZrodla: string | null; wiekStrony: string | null; data: string | null; pewnosc: 'oficjalne' | 'agregator' | 'forum'; uwagi: string | null }
-export interface ZwiadPromocji { usluga: string; kiedy: string; znalezione: ZnaleziskoPromocji[]; odrzucone: (ZnaleziskoPromocji & { powod: string })[]; podsumowanie: string; koszt: { wyszukan: number; tokenyWe: number; tokenyWy: number; usdWyszukiwania: number }; uwaga: string }
+export interface ZnaleziskoPromocji { rodzaj: 'kod' | 'promocja' | 'program' | 'partnerska'; kod: string | null; opis: string; rabat: string | null; zrodlo: string; tytulZrodla: string | null; wiekStrony: string | null; data: string | null; pewnosc: 'oficjalne' | 'agregator' | 'forum'; uwagi: string | null; potwierdzone?: 'adres' | 'domena' | null }
+export interface ZwiadPromocji { usluga: string; kiedy: string; dostawca?: 'anthropic' | 'gemini'; model?: string; znalezione: ZnaleziskoPromocji[]; odrzucone: (ZnaleziskoPromocji & { powod: string })[]; podsumowanie: string; koszt: { wyszukan: number; tokenyWe: number; tokenyWy: number; usdWyszukiwania: number | null }; uwaga: string }
+/** ☁️ Kto szuka: auto (Claude, gdy most ma jego klucz, inaczej Gemini), Claude (web search) albo Gemini (Google Search). */
+export type DostawcaPromocji = 'auto' | 'anthropic' | 'gemini';
 export const zwiadyPromocji = () => api<{ zwiady: ZwiadPromocji[] }>('/api/zwiadowca/promocje').then((d) => d.zwiady);
-export const szukajPromocji = (usluga: string) => api<{ zwiad: ZwiadPromocji }>('/api/zwiadowca/promocje', { method: 'POST', body: JSON.stringify({ usluga }) }).then((d) => d.zwiad);
+export const szukajPromocji = (usluga: string, dostawca: DostawcaPromocji = 'auto') => api<{ zwiad: ZwiadPromocji }>('/api/zwiadowca/promocje', { method: 'POST', body: JSON.stringify({ usluga, dostawca }) }).then((d) => d.zwiad);
 /** 👁️ Styl retekstury ze zdjęcia bryły (most pyta model widzący — zajmuje kartę na chwilę). */
 export const stylZeZdjecia = (id: string) => api<{ styl: string; model: string }>(`/api/assety3d/chmura/${encodeURIComponent(id)}/styl`, { method: 'POST', body: '{}' });
 /** Styl z opisu bryły i jej poprawek — od razu, bez modelu (gdy pole stylu puste). */
