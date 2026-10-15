@@ -67,7 +67,7 @@ export type ZlecenieChmury = { rodzaj: 'retekstura'; styl: string; rozdzielczosc
   | { rodzaj: 'obraz3d'; model: 'latest' | 'meshy-6-lite'; rozdzielczosc: '2k' | '4k' | '8k'; pbr: boolean; poza: '' | 'a-pose' | 't-pose' }
   | { rodzaj: 'rig'; wzrost: number; akcje: number[]; scianyRig?: number } | { rodzaj: 'akcje'; akcje: number[] };
 /** 🎛️ Auto-dobór ≤ 10 akcji z biblioteki do zestawu (gra, walka, taniec…) — bez tych, które bryła już ma. Więcej = kolejna paczka na tym samym rigu. */
-export const ZESTAWY_AKCJI: Record<string, string> = { gra: '🎮 podstawy gry', walka: '⚔️ walka', taniec: '💃 taniec', codzienne: '🏡 codzienne', cialo: '🤸 ruchy ciała' };
+export const ZESTAWY_AKCJI: Record<string, string> = { gra: '🎮 podstawy gry', walka: '⚔️ walka', taniec: '💃 taniec', codzienne: '🏡 codzienne', cialo: '🤸 ruchy ciała', studio: '🎙️ prowadzący studia' };
 export const zestawAkcji = (id: string, zestaw: string) => api<{ akcje: AkcjaMeshy[] }>(`/api/assety3d/chmura/${encodeURIComponent(id)}/zestaw/${encodeURIComponent(zestaw)}`).then((d) => d.akcje);
 /** 📚 Akcja z biblioteki animacji Meshy (rig: 3 kredyty za akcję, ≤ 10). */
 export interface AkcjaMeshy { id: number; nazwa: string; klucz: string; kategoria: string; podkategoria: string; podglad: string | null }
